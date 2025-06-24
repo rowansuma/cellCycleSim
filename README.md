@@ -21,3 +21,10 @@ Made by Rowan Sumanaweera
 3. Move on to flexible cell membranes
    
 <p>Once I get to the third stage, I can start worrying about gene expression and the future plans for this project.</p>
+
+## Current Task List
+
+- [ ] Research & Implement Verlet Integration
+- [ ] Draw Cells
+- [ ] Add Cell Cycle
+- [ ] Add Contact Inhibition

@@ -1,17 +1,18 @@
 import pygame
+from env import Env
+from cell import Cell
 
 pygame.init()
 
-screenSize = (800, 600)
-fps = 60
+env = Env()
 
-screen = pygame.display.set_mode(screenSize, pygame.RESIZABLE)
+screen = pygame.display.set_mode(env.SCREEN_SIZE, pygame.RESIZABLE)
 clock = pygame.time.Clock()
 
 
 running = True
 while running:
-    screen.fill("#ffffff")
+    screen.fill("#000000")
 
     if pygame.mouse.get_pressed()[0]:
         pass
@@ -32,7 +33,7 @@ while running:
                 pass
 
     pygame.display.flip()
-    clock.tick(fps)
+    clock.tick(env.TARGET_FPS)
 
 
 pygame.quit()
