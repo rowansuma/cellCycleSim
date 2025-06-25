@@ -31,10 +31,16 @@ Made by Rowan Sumanaweera
 - [x] Add Cell Cycle
 - [x] Add Contact Inhibition
 - [x] Fix Border Cell Division
+- [x] Add Graphing Tool
 - [ ] Add Deletion Tool
 - [ ] Implement Cell Cycle Stages
 - [ ] Implement True Contact Inhibition
 - [ ] Move on from circles?
+
+## Usage
+
+1. Run plot.py to create MatPlotLib window for real-time graphing
+2. Run main.py to open the simulation, input simulation parameters.
 
 ## Other Notes
 

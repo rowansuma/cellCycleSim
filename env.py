@@ -1,13 +1,13 @@
 import taichi as ti
 @ti.data_oriented
 class Env:
-    def __init__(self, friction, radius, max, freq):
+    def __init__(self, radius, max, freq):
         self.SCREEN_SIZE = (1000, 1000)
         self.SUBSTEPS = 3
 
         self.MAX_CELL_COUNT = max
         self.CELL_RADIUS = radius
-        self.CELL_RADIUS_SCALAR = 0.6 # Increase for better visibility at larger scale
+        self.CELL_RADIUS_SCALAR = 1 # Increase for better visibility at larger scale
         self.CELL_REPULSION = 0.00004 # how aggressively the cells repulse each other
         self.INHIBITION_DISTANCE = 2.0
         self.INHIBITION_COUNT = 3
@@ -16,7 +16,7 @@ class Env:
         self.GRID_SCALE_FACTOR = 1.5
         self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
         self.MAX_PARTICLES_PER_GRID_CELL = 64  # or 64
-        self.FRICTION = friction
+        self.FRICTION = 0.98
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
@@ -110,12 +110,11 @@ class Env:
         offset_range = self.REPRODUCTION_OFFSET * self.CELL_RADIUS
         for i in range(self.cellsAlive[None]):
             if self.neighborsField[i] < self.INHIBITION_COUNT:
-                if self.step[None] - self.lastDivField[i] >= self.CELL_CYCLE_DURATION[None]:
-                    # Check current count before adding
+                if self.step[None] - self.lastDivField[i] >= self.CELL_CYCLE_DURATION[None]: # Cell Division
+                    # Safe Addition
                     current = ti.atomic_add(self.cellsAlive[None], 0)
                     if current + 1 >= self.MAX_CELL_COUNT:
-                        continue  # SKIP reproduction safely
-                    # Atomic add and confirm new index is safe
+                        continue
                     new_idx = ti.atomic_add(self.cellsAlive[None], 1)
                     if new_idx < self.MAX_CELL_COUNT:
                         offset = ti.Vector([
