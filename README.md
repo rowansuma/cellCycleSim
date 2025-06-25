@@ -26,10 +26,14 @@ Made by Rowan Sumanaweera
 
 - [x] Research & Implement Verlet Integration
 - [x] Draw Cells
-- [ ] Optimize with Spatial Partitioning
-- [ ] Allow for Appending and Removing Cells from Field
-- [ ] Add Cell Cycle
-- [ ] Add Contact Inhibition
+- [x] Optimize with Spatial Partitioning
+- [x] Allow for Appending and Removing Cells from Field
+- [x] Add Cell Cycle
+- [x] Add Contact Inhibition
+- [ ] Fix Border Cell Division
+- [ ] Implement Cell Cycle Stages
+- [ ] Implement True Contact Inhibition
+- [ ] Move on from circles?
 
 ## Other Notes
 
