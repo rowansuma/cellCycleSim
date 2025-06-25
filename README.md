@@ -30,7 +30,8 @@ Made by Rowan Sumanaweera
 - [x] Allow for Appending and Removing Cells from Field
 - [x] Add Cell Cycle
 - [x] Add Contact Inhibition
-- [ ] Fix Border Cell Division
+- [x] Fix Border Cell Division
+- [ ] Add Deletion Tool
 - [ ] Implement Cell Cycle Stages
 - [ ] Implement True Contact Inhibition
 - [ ] Move on from circles?
