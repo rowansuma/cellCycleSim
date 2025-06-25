@@ -1,6 +1,7 @@
 import taichi as ti
 from env import Env
 import time
+import csv
 
 ti.init(arch=ti.gpu)
 
@@ -8,13 +9,11 @@ ti.init(arch=ti.gpu)
 print("\nSimulation Parameters:\n")
 defaults = input("Use Defaults? (y/n): ")
 if defaults == "y":
-    friction = 0.98
-    radius = 0.01
+    radius = 0.002
     max = 100000
-    freq = 20
-    print(f"Using defaults:\nFriction = {friction}\nRadius = {radius}\nMax = {max}\nDuration = {freq}")
+    freq = 60
+    print(f"Using defaults:\nRadius = {radius}\nMax = {max}\nDuration = {freq}")
 elif defaults == "n":
-    friction = float(input("Friction Multiplier (0 = no movement, 1 = no friction): "))
     radius = float(input("Cell Radius (lower = larger scale sim): "))
     max = int(input("Max Cells (larger = more memory):"))
     freq = int(input("Cell Cycle Duration (in steps): "))
@@ -24,10 +23,18 @@ else:
 
 time.sleep(2)
 
-env = Env(friction, radius, max, freq)
+env = Env(radius, max, freq)
 
 gui = ti.GUI("Cell Cycle Sim", res=env.SCREEN_SIZE)
 env.initialize_board()
+
+LMB_down = False
+
+fieldnames = ["step", "population"]
+
+with open('data.csv', 'w') as csv_file:
+    csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+    csv_writer.writeheader()
 
 # Main Loop
 while gui.running:
@@ -39,9 +46,37 @@ while gui.running:
         env.handle_collisions()
     env.handle_cell_cycle()
     env.clamp_cell_count()
+
+    # Mouse Button Handling
+    mouse_pos = gui.get_cursor_pos()
+
+    for e in gui.get_events():
+        if e.key == ti.GUI.LMB:
+            if e.type == ti.GUI.PRESS:
+                LMB_down = True
+            elif e.type == ti.GUI.RELEASE:
+                LMB_down = False
+
+        if LMB_down:
+
+            pass
+
     gui.circles(env.posField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0x66ccff)
     # print(env.posField.to_numpy())
     gui.show()
+
+    # Write to CSV
+    with open('data.csv', 'a') as csv_file:
+        csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+        info = {
+            "step": env.step[None],
+            "population": env.cellsAlive[None]
+        }
+        csv_writer.writerow(info)
+
+
+
     # print(env.step)
     # print(env.cellsAlive[None])
     warn = ""
