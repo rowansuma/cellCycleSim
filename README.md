@@ -24,7 +24,13 @@ Made by Rowan Sumanaweera
 
 ## Current Task List
 
-- [ ] Research & Implement Verlet Integration
-- [ ] Draw Cells
+- [x] Research & Implement Verlet Integration
+- [x] Draw Cells
+- [ ] Optimize with Spatial Partitioning
+- [ ] Allow for Appending and Removing Cells from Field
 - [ ] Add Cell Cycle
 - [ ] Add Contact Inhibition
+
+## Other Notes
+
+* I originally was planning to use standard python classes and verlet integration to do this, but after some research I decided to try using [Taichi](https://www.taichi-lang.org/). This will allow me to use verlet integration with help from the GPU and speed things up.
