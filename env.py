@@ -1,4 +1,5 @@
 import taichi as ti
+
 @ti.data_oriented
 class Env:
     def __init__(self, radius, max_cells, freq, scalpel_size):
@@ -23,6 +24,14 @@ class Env:
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
 
+        self.PHASE_COLORS = [
+            0x858585,  # G0 (gray)
+            0x66ccff,  # G1 (blue)
+            0xffcc66,  # S  (yellow)
+            0x66ff66,  # G2 (green)
+            0xff6699,  # M  (pink)
+        ]
+
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
         self.cellsAlive = ti.field(dtype=ti.i32, shape=()) # 1
@@ -30,8 +39,9 @@ class Env:
         # Cell Info
         self.posField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Current Pos
         self.prevPosField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Previous Pos
-        self.lastDivField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
-        self.neighborsField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.lastDivField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.neighborsField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.phaseField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
 
         # Grid
         self.grid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
@@ -40,8 +50,9 @@ class Env:
         # Cell Info Buffers
         self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.prevPosFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
-        self.lastDivFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
-        self.neighborsFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.lastDivFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.neighborsFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.phaseFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
 
         # Deletion
         self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
@@ -60,21 +71,23 @@ class Env:
             self.prevPosField[index] = self.posField[index]
             self.lastDivField[index] = -1
             self.neighborsField[index] = -1
+            self.phaseField[index] = -1
         self.posField[0] = [0.5, 0.5] # Init First Cell
         self.prevPosField[0] = self.posField[0]
         self.lastDivField[0] = 0
         self.neighborsField[0] = 0
+        self.phaseField[0] = 1
 
 
     @ti.kernel
     def verlet_step(self): # Verlet Calculations for Motion (velocity calc)
         for index in range(self.cellsAlive[None]):
             tempVar = self.posField[index]
-            self.posField[index] += (self.posField[index] - self.prevPosField[index])*self.FRICTION  # No forces for now
+            self.posField[index] += (self.posField[index] - self.prevPosField[index])*self.FRICTION
             self.prevPosField[index] = tempVar
 
     @ti.kernel
-    def border_constraints(self):
+    def border_constraints(self): # Stop cells from exiting view
         for i in range(self.cellsAlive[None]):
             self.neighborsField[i] = 0
             at_border = False
@@ -82,13 +95,13 @@ class Env:
                 if self.posField[i][j] < 0:
                     self.posField[i][j] = 0
                     v = self.posField[i][j] - self.prevPosField[i][j]
-                    self.prevPosField[i][j] = self.posField[i][j] + v * 0.5  # damp & reflect
+                    self.prevPosField[i][j] = self.posField[i][j] + v * 0.5
                     at_border = True
 
                 if self.posField[i][j] > 1:
                     self.posField[i][j] = 1
                     v = self.posField[i][j] - self.prevPosField[i][j]
-                    self.prevPosField[i][j] = self.posField[i][j] + v * 0.5  # damp & reflect
+                    self.prevPosField[i][j] = self.posField[i][j] + v * 0.5
                     at_border = True
             if at_border:
                 self.neighborsField[i] += 1
@@ -116,19 +129,36 @@ class Env:
                                 movementOffset = self.CELL_REPULSION * ((min_dist - dist) / min_dist) * dx.normalized()
                                 self.posField[i] += movementOffset
                                 self.posField[other] -= movementOffset
-                            if dist <= self.INHIBITION_DISTANCE * self.CELL_RADIUS:  # scaled inhibition distance
+                            if dist <= self.INHIBITION_DISTANCE * self.CELL_RADIUS:
                                 self.neighborsField[i] += 1
 
 
     @ti.kernel
     def handle_cell_cycle(self):
         offset_range = self.REPRODUCTION_OFFSET * self.CELL_RADIUS
+        g1_end = self.CELL_CYCLE_DURATION[None] * 10 // 24
+        s_end = self.CELL_CYCLE_DURATION[None] * 18 // 24
+        g2_end = self.CELL_CYCLE_DURATION[None] * 22 // 24
+
         for i in range(self.cellsAlive[None]):
-            if self.neighborsField[i] < self.INHIBITION_COUNT:
-                if self.step[None] - self.lastDivField[i] >= self.CELL_CYCLE_DURATION[None]: # Cell Division
-                    # Safe Addition
+            # Cycle Phase Assignment
+            cycleTime = self.step[None] - self.lastDivField[i]
+            if self.neighborsField[i] >= self.INHIBITION_COUNT:
+                self.phaseField[i] = 0  # G0
+            elif cycleTime < g1_end:
+                self.phaseField[i] = 1  # G1
+            elif cycleTime < s_end:
+                self.phaseField[i] = 2  # S
+            elif cycleTime < g2_end:
+                self.phaseField[i] = 3  # G2
+            else:
+                self.phaseField[i] = 4  # M
+
+            # Cell Division
+            if self.phaseField[i] != 0:
+                if cycleTime >= self.CELL_CYCLE_DURATION[None]:
                     current = ti.atomic_add(self.cellsAlive[None], 0)
-                    if current + 1 >= self.MAX_CELL_COUNT:
+                    if current + 1 >= self.MAX_CELL_COUNT: # Safe Addition
                         continue
                     new_idx = ti.atomic_add(self.cellsAlive[None], 1)
                     if new_idx < self.MAX_CELL_COUNT:
@@ -141,7 +171,8 @@ class Env:
                         self.prevPosField[new_idx] = new_pos  # match to avoid initial velocity
                         self.lastDivField[new_idx] = self.step[None]
                         self.lastDivField[i] = self.step[None]
-                        self.neighborsField[i] = 0
+                        self.neighborsField[new_idx] = 0
+                        self.phaseField[new_idx] = 1
 
 
     @ti.kernel
@@ -186,6 +217,7 @@ class Env:
                 self.prevPosFieldBuffer[idx] = self.prevPosField[i]
                 self.lastDivFieldBuffer[idx] = self.lastDivField[i]
                 self.neighborsFieldBuffer[idx] = self.neighborsField[i]
+                self.phaseFieldBuffer[idx] = self.phaseField[i]
 
     @ti.kernel
     def copy_back_buffer(self): # Write the buffer cells back to main fields
@@ -195,9 +227,11 @@ class Env:
             self.prevPosField[i] = self.prevPosFieldBuffer[i]
             self.lastDivField[i] = self.lastDivFieldBuffer[i]
             self.neighborsField[i] = self.neighborsFieldBuffer[i]
+            self.phaseField[i] = self.phaseFieldBuffer[i]
         for i in range(n, self.cellsAlive[None]):
             self.posField[i] = [-1, -1]
             self.prevPosField[i] = [-1, -1]
             self.lastDivField[i] = -1
             self.neighborsField[i] = -1
+            self.phaseField[i] = -1
         self.cellsAlive[None] = n

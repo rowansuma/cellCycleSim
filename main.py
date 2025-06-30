@@ -1,11 +1,13 @@
 import taichi as ti
+import numpy as np
 from env import Env
 import time
 import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 100000, 20, 0.05]
+defaults = [0.002, 100000, 24, 0.05]
+display_phase = True
 
 # Simulation Parameters
 print("\nSimulation Parameters:\n")
@@ -67,7 +69,17 @@ while gui.running:
         env.write_buffer_cells()
         env.copy_back_buffer()
 
-    gui.circles(env.posField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0x66ccff)
+    if display_phase:
+        phases = env.phaseField.to_numpy()[:env.cellsAlive[None]]
+        colors = np.array([env.PHASE_COLORS[p] for p in phases], dtype=np.uint32)
+
+        gui.circles(
+            env.posField.to_numpy()[:env.cellsAlive[None]],
+            radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
+            color=colors
+        )
+    else:
+        gui.circles(env.posField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0x66ccff)
     gui.show()
 
     # Write to CSV
