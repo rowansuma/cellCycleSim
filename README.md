@@ -12,16 +12,6 @@ Made by Rowan Sumanaweera
 * Cells must undergo contact inhibition and exit the cell cycle when in contact with many other cells
 * Cells must have physics interactions to prevent them from overlapping
 
-## The Approach
-
-<p>I want to handle this project in multiple stages.</p>
-
-1. Demonstrate all of the above rules while representing cells as simple rigid circles
-2. Move on to rigid ovals (possibly could skip this step)
-3. Move on to flexible cell membranes
-   
-<p>Once I get to the third stage, I can start worrying about gene expression and the future plans for this project.</p>
-
 ## Current Task List
 
 - [x] Research & Implement Verlet Integration
@@ -33,8 +23,8 @@ Made by Rowan Sumanaweera
 - [x] Fix Border Cell Division
 - [x] Add Graphing Tool
 - [x] Add Deletion Tool
-- [ ] Implement Cell Cycle Stages
-- [ ] Implement True Contact Inhibition
+- [x] Implement Cell Cycle Stages
+- [ ] Tweak Contact Inhibition
 - [ ] Move on from circles?
 
 ## Usage
@@ -42,6 +32,7 @@ Made by Rowan Sumanaweera
 1. Run plot.py to create MatPlotLib window for real-time graphing
 2. Run main.py to open the simulation, input simulation parameters.
 3. Hold down Left Click to delete cells within a radius
+4. Note that the colors indicate cell cycle stage; (gray=G0, blue=G1, yellow=S, green=G2, red=M)
 
 ## Other Notes
 
