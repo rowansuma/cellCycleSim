@@ -1,38 +1,53 @@
 import taichi as ti
 @ti.data_oriented
 class Env:
-    def __init__(self, radius, max, freq):
+    def __init__(self, radius, max_cells, freq, scalpel_size):
         self.SCREEN_SIZE = (1000, 1000)
         self.SUBSTEPS = 3
 
-        self.MAX_CELL_COUNT = max
+        # Constants
+        self.MAX_CELL_COUNT = max_cells
         self.CELL_RADIUS = radius
-        self.CELL_RADIUS_SCALAR = 1 # Increase for better visibility at larger scale
-        self.CELL_REPULSION = 0.00004 # how aggressively the cells repulse each other
+        self.CELL_RADIUS_SCALAR = 1.0 # Increase for better visibility at larger scale
+        self.CELL_REPULSION = 0.000004 # how aggressively the cells repulse each other
         self.INHIBITION_DISTANCE = 2.0
         self.INHIBITION_COUNT = 3
         self.REPRODUCTION_OFFSET = 1.5
+        self.SCALPEL_RADIUS = scalpel_size
 
         self.GRID_SCALE_FACTOR = 1.5
         self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
         self.MAX_PARTICLES_PER_GRID_CELL = 64  # or 64
-        self.FRICTION = 0.98
+        self.FRICTION = 0.95
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
 
+        # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
         self.cellsAlive = ti.field(dtype=ti.i32, shape=()) # 1
 
+        # Cell Info
         self.posField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Current Pos
         self.prevPosField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Previous Pos
         self.lastDivField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.neighborsField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
+        # Grid
         self.grid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
-        self.grid_count = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES))  # how many particles per cell
+        self.gridCount = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES))  # how many particles per cell
 
+        # Cell Info Buffers
+        self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.prevPosFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.lastDivFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.neighborsFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
+        # Deletion
+        self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.bufferCount = ti.field(dtype=ti.i32, shape=())
+
+        self.initialize_board()
 
     @ti.kernel
     def initialize_board(self): # Board Init, assign taichi fields
@@ -90,7 +105,7 @@ class Env:
                 cx = gridcell_x + offset[0]
                 cy = gridcell_y + offset[1]
                 if 0 <= cx < self.GRID_RES and 0 <= cy < self.GRID_RES:
-                    count = self.grid_count[cx, cy]
+                    count = self.gridCount[cx, cy]
                     for j in range(count):
                         other = self.grid[cx, cy, j]
                         if other != i:
@@ -131,8 +146,8 @@ class Env:
 
     @ti.kernel
     def clear_grid(self): # Clear the grid
-        for I in ti.grouped(self.grid_count):
-            self.grid_count[I] = 0
+        for i in ti.grouped(self.gridCount):
+            self.gridCount[i] = 0
 
     @ti.kernel
     def insert_into_grid(self): # Place the cell into the correct gridcell
@@ -141,7 +156,7 @@ class Env:
             cell_x = ti.min(ti.max(int(pos[0] * self.GRID_RES), 0), self.GRID_RES - 1)
             cell_y = ti.min(ti.max(int(pos[1] * self.GRID_RES), 0), self.GRID_RES - 1)
 
-            index = ti.atomic_add(self.grid_count[cell_x, cell_y], 1)
+            index = ti.atomic_add(self.gridCount[cell_x, cell_y], 1)
             if index < self.MAX_PARTICLES_PER_GRID_CELL:
                 self.grid[cell_x, cell_y, index] = i
 
@@ -149,3 +164,40 @@ class Env:
     def clamp_cell_count(self):
         if self.cellsAlive[None] > self.MAX_CELL_COUNT:
             self.cellsAlive[None] = self.MAX_CELL_COUNT
+
+    @ti.kernel
+    def mark_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, scalpel_radius: ti.f32): # Mark cells for deletion
+        for i in range(self.cellsAlive[None]):
+            dx = self.posField[i][0] - mouse_x
+            dy = self.posField[i][1] - mouse_y
+            dist = (dx * dx + dy * dy) ** 0.5
+            if dist < scalpel_radius:
+                self.toDelete[i] = 1
+            else:
+                self.toDelete[i] = 0
+
+    @ti.kernel
+    def write_buffer_cells(self): # Write to-be-swapped cells to buffer
+        self.bufferCount[None] = 0
+        for i in range(self.cellsAlive[None]):
+            if self.toDelete[i] == 0:
+                idx = ti.atomic_add(self.bufferCount[None], 1)
+                self.posFieldBuffer[idx] = self.posField[i]
+                self.prevPosFieldBuffer[idx] = self.prevPosField[i]
+                self.lastDivFieldBuffer[idx] = self.lastDivField[i]
+                self.neighborsFieldBuffer[idx] = self.neighborsField[i]
+
+    @ti.kernel
+    def copy_back_buffer(self): # Write the buffer cells back to main fields
+        n = self.bufferCount[None]
+        for i in range(n):
+            self.posField[i] = self.posFieldBuffer[i]
+            self.prevPosField[i] = self.prevPosFieldBuffer[i]
+            self.lastDivField[i] = self.lastDivFieldBuffer[i]
+            self.neighborsField[i] = self.neighborsFieldBuffer[i]
+        for i in range(n, self.cellsAlive[None]):
+            self.posField[i] = [-1, -1]
+            self.prevPosField[i] = [-1, -1]
+            self.lastDivField[i] = -1
+            self.neighborsField[i] = -1
+        self.cellsAlive[None] = n
