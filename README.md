@@ -32,7 +32,7 @@ Made by Rowan Sumanaweera
 - [x] Add Contact Inhibition
 - [x] Fix Border Cell Division
 - [x] Add Graphing Tool
-- [ ] Add Deletion Tool
+- [x] Add Deletion Tool
 - [ ] Implement Cell Cycle Stages
 - [ ] Implement True Contact Inhibition
 - [ ] Move on from circles?
@@ -41,7 +41,8 @@ Made by Rowan Sumanaweera
 
 1. Run plot.py to create MatPlotLib window for real-time graphing
 2. Run main.py to open the simulation, input simulation parameters.
+3. Hold down Left Click to delete cells within a radius
 
 ## Other Notes
 
-* I originally was planning to use standard python classes and verlet integration to do this, but after some research I decided to try using [Taichi](https://www.taichi-lang.org/). This will allow me to use verlet integration with help from the GPU and speed things up.
+* I originally was planning to use standard python classes and Verlet integration to do this, but after some research I decided to try using [Taichi](https://www.taichi-lang.org/). This will allow me to use Verlet integration with help from the GPU and speed things up.
