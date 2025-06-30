@@ -24,7 +24,7 @@ Made by Rowan Sumanaweera
 - [x] Add Graphing Tool
 - [x] Add Deletion Tool
 - [x] Implement Cell Cycle Stages
-- [ ] Tweak Contact Inhibition
+- [x] Tweak Contact Inhibition
 - [ ] Move on from circles?
 
 ## Usage

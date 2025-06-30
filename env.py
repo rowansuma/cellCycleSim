@@ -10,9 +10,10 @@ class Env:
         self.MAX_CELL_COUNT = max_cells
         self.CELL_RADIUS = radius
         self.CELL_RADIUS_SCALAR = 1.0 # Increase for better visibility at larger scale
-        self.CELL_REPULSION = 0.000004 # how aggressively the cells repulse each other
-        self.INHIBITION_DISTANCE = 2.0
-        self.INHIBITION_COUNT = 3
+        if self.CELL_RADIUS <= 0.0002: self.CELL_RADIUS_SCALAR = 0.00024/self.CELL_RADIUS
+        self.CELL_REPULSION = 0.002 # how aggressively the cells repulse each other
+        self.INHIBITION_DISTANCE = 2.4
+        self.INHIBITION_COUNT = 4
         self.REPRODUCTION_OFFSET = 1.5
         self.SCALPEL_RADIUS = scalpel_size
 
@@ -104,7 +105,7 @@ class Env:
                     self.prevPosField[i][j] = self.posField[i][j] + v * 0.5
                     at_border = True
             if at_border:
-                self.neighborsField[i] += 1
+                self.neighborsField[i] += 2
 
 
     @ti.kernel
@@ -126,7 +127,7 @@ class Env:
                             dist = dx.norm()
                             min_dist = 2 * self.CELL_RADIUS
                             if min_dist > dist > 1e-5:
-                                movementOffset = self.CELL_REPULSION * ((min_dist - dist) / min_dist) * dx.normalized()
+                                movementOffset = self.CELL_RADIUS * self.CELL_REPULSION * ((min_dist - dist) / min_dist) * dx.normalized()
                                 self.posField[i] += movementOffset
                                 self.posField[other] -= movementOffset
                             if dist <= self.INHIBITION_DISTANCE * self.CELL_RADIUS:
@@ -135,44 +136,57 @@ class Env:
 
     @ti.kernel
     def handle_cell_cycle(self):
-        offset_range = self.REPRODUCTION_OFFSET * self.CELL_RADIUS
-        g1_end = self.CELL_CYCLE_DURATION[None] * 10 // 24
-        s_end = self.CELL_CYCLE_DURATION[None] * 18 // 24
-        g2_end = self.CELL_CYCLE_DURATION[None] * 22 // 24
+        cycle_length = self.CELL_CYCLE_DURATION[None]
+        g1_end = max(1, int(0.4 * cycle_length))
+        s_end  = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
+        g2_end = max(s_end + 1, s_end + max(1, int(0.17 * cycle_length)))
+        if g2_end > cycle_length:
+            g2_end = cycle_length
+        early_g1_end = max(2, g1_end // 3)
 
         for i in range(self.cellsAlive[None]):
-            # Cycle Phase Assignment
             cycleTime = self.step[None] - self.lastDivField[i]
-            if self.neighborsField[i] >= self.INHIBITION_COUNT:
-                self.phaseField[i] = 0  # G0
-            elif cycleTime < g1_end:
-                self.phaseField[i] = 1  # G1
-            elif cycleTime < s_end:
-                self.phaseField[i] = 2  # S
-            elif cycleTime < g2_end:
-                self.phaseField[i] = 3  # G2
+            prev_phase = self.phaseField[i]
+            if prev_phase == 0:  # If in G0, stay in G0 until contact inhibition is relieved
+                if self.neighborsField[i] < self.INHIBITION_COUNT:
+                    # Leaving G0, reset cycle and enter G1
+                    self.phaseField[i] = 1
+                    self.lastDivField[i] = self.step[None]
+                    cycleTime = 0
+                else:
+                    self.phaseField[i] = 0  # Stay in G0
             else:
-                self.phaseField[i] = 4  # M
+                # Only allow entry to G0 during early G1
+                if cycleTime < early_g1_end and self.neighborsField[i] >= self.INHIBITION_COUNT:
+                    self.phaseField[i] = 0  # Enter G0
+                elif cycleTime < g1_end:
+                    self.phaseField[i] = 1  # G1
+                elif cycleTime < s_end:
+                    self.phaseField[i] = 2  # S
+                elif cycleTime < g2_end:
+                    self.phaseField[i] = 3  # G2
+                else:
+                    self.phaseField[i] = 4  # M
 
             # Cell Division
-            if self.phaseField[i] != 0:
-                if cycleTime >= self.CELL_CYCLE_DURATION[None]:
-                    current = ti.atomic_add(self.cellsAlive[None], 0)
-                    if current + 1 >= self.MAX_CELL_COUNT: # Safe Addition
-                        continue
-                    new_idx = ti.atomic_add(self.cellsAlive[None], 1)
-                    if new_idx < self.MAX_CELL_COUNT:
-                        offset = ti.Vector([
-                            ti.random() * offset_range - offset_range * 0.5,
-                            ti.random() * offset_range - offset_range * 0.5
-                        ])
-                        new_pos = self.posField[i] + offset
-                        self.posField[new_idx] = new_pos
-                        self.prevPosField[new_idx] = new_pos  # match to avoid initial velocity
-                        self.lastDivField[new_idx] = self.step[None]
-                        self.lastDivField[i] = self.step[None]
-                        self.neighborsField[new_idx] = 0
-                        self.phaseField[new_idx] = 1
+            if self.phaseField[i] == 4 and cycleTime >= cycle_length:
+                current = ti.atomic_add(self.cellsAlive[None], 0)
+                if current + 1 >= self.MAX_CELL_COUNT:  # Safe Addition
+                    continue
+                new_idx = ti.atomic_add(self.cellsAlive[None], 1)
+                if new_idx < self.MAX_CELL_COUNT:
+                    offset_range = self.REPRODUCTION_OFFSET * self.CELL_RADIUS
+                    offset = ti.Vector([
+                        ti.random() * offset_range - offset_range * 0.5,
+                        ti.random() * offset_range - offset_range * 0.5
+                    ])
+                    new_pos = self.posField[i] + offset
+                    self.posField[new_idx] = new_pos
+                    self.prevPosField[new_idx] = new_pos
+                    self.lastDivField[new_idx] = self.step[None]
+                    self.lastDivField[i] = self.step[None]
+                    self.neighborsField[i] = 0
+                    self.phaseField[new_idx] = 1
 
 
     @ti.kernel
