@@ -1,10 +1,11 @@
 import taichi as ti
+import numpy as np
 
 @ti.data_oriented
 class Env:
     def __init__(self, radius, max_cells, freq, scalpel_size):
         self.SCREEN_SIZE = (1000, 1000)
-        self.SUBSTEPS = 3
+        self.SUBSTEPS = 2
 
         # Constants
         self.MAX_CELL_COUNT = max_cells
@@ -19,19 +20,13 @@ class Env:
 
         self.GRID_SCALE_FACTOR = 1.5
         self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
-        self.MAX_PARTICLES_PER_GRID_CELL = 64  # or 64
+        self.MAX_PARTICLES_PER_GRID_CELL = 8
         self.FRICTION = 0.95
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
 
-        self.PHASE_COLORS = [
-            0x858585,  # G0 (gray)
-            0x66ccff,  # G1 (blue)
-            0xffcc66,  # S  (yellow)
-            0x66ff66,  # G2 (green)
-            0xff6699,  # M  (pink)
-        ]
+        self.PHASE_COLORS = np.array([0x858585, 0x66ccff, 0xffcc66, 0x66ff66, 0xff6699], dtype=np.uint32)
 
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
@@ -185,9 +180,21 @@ class Env:
                     self.prevPosField[new_idx] = new_pos
                     self.lastDivField[new_idx] = self.step[None]
                     self.lastDivField[i] = self.step[None]
-                    self.neighborsField[i] = 0
+                    self.neighborsField[new_idx] = 0
                     self.phaseField[new_idx] = 1
 
+    @ti.kernel
+    def create_cell(self, posX: ti.f32, posY: ti.f32):
+        current = ti.atomic_add(self.cellsAlive[None], 0)
+        if current + 1 < self.MAX_CELL_COUNT:  # Safe Addition
+            new_idx = ti.atomic_add(self.cellsAlive[None], 1)
+            if new_idx < self.MAX_CELL_COUNT:
+                new_pos = [posX, posY]
+                self.posField[new_idx] = new_pos
+                self.prevPosField[new_idx] = new_pos
+                self.lastDivField[new_idx] = self.step[None]
+                self.neighborsField[new_idx] = 0
+                self.phaseField[new_idx] = 1
 
     @ti.kernel
     def clear_grid(self): # Clear the grid

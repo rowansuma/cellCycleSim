@@ -32,7 +32,8 @@ Made by Rowan Sumanaweera
 1. Run plot.py to create MatPlotLib window for real-time graphing
 2. Run main.py to open the simulation, input simulation parameters.
 3. Hold down Left Click to delete cells within a radius
-4. Note that the colors indicate cell cycle stage; (gray=G0, blue=G1, yellow=S, green=G2, red=M)
+4. Press Right Click to create a cell
+5. Note that the colors indicate cell cycle stage; (gray=G0, blue=G1, yellow=S, green=G2, red=M)
 
 ## Other Notes
 

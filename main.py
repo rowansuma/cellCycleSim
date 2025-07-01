@@ -6,8 +6,9 @@ import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 100000, 24, 0.05]
+defaults = [0.002, 120000, 24, 0.05]
 display_phase = True
+write_csv = True
 
 # Simulation Parameters
 print("\nSimulation Parameters:\n")
@@ -62,6 +63,8 @@ while gui.running:
                 LMB_down = True
             elif e.type == ti.GUI.RELEASE:
                 LMB_down = False
+        if e.key == ti.GUI.RMB:
+            env.create_cell(mouse_pos[0], mouse_pos[1])
 
     # Deletion
     if LMB_down and mouse_pos is not None:
@@ -70,11 +73,12 @@ while gui.running:
         env.copy_back_buffer()
 
     if display_phase:
+        positions = env.posField.to_numpy()[:env.cellsAlive[None]]
         phases = env.phaseField.to_numpy()[:env.cellsAlive[None]]
-        colors = np.array([env.PHASE_COLORS[p] for p in phases], dtype=np.uint32)
+        colors = env.PHASE_COLORS[phases]
 
         gui.circles(
-            env.posField.to_numpy()[:env.cellsAlive[None]],
+            positions,
             radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
             color=colors
         )
@@ -83,18 +87,20 @@ while gui.running:
     gui.show()
 
     # Write to CSV
-    with open('data.csv', 'a') as csv_file:
-        csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+    if write_csv:
+        with open('data.csv', 'a') as csv_file:
+            csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
-        info = {
-            "step": env.step[None],
-            "population": env.cellsAlive[None]
-        }
-        csv_writer.writerow(info)
+            info = {
+                "step": env.step[None],
+                "population": env.cellsAlive[None]
+            }
+            csv_writer.writerow(info)
 
 
     warn = ""
     if env.cellsAlive[None] == env.MAX_CELL_COUNT:
         warn = " | Warning: Max Cell Count Reached!"
-    print("Step: " + str(env.step[None]) + " | Cells: " + str(env.cellsAlive[None]) + warn)
+    if env.step[None] % 10 == 0:
+        print("Step: " + str(env.step[None]) + " | Cells: " + str(env.cellsAlive[None]) + warn)
     env.step[None] += 1
