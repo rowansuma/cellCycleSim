@@ -5,7 +5,7 @@ import numpy as np
 class Env:
     def __init__(self, radius, max_cells, freq, scalpel_size):
         self.SCREEN_SIZE = (1000, 1000)
-        self.SUBSTEPS = 2
+        self.SUBSTEPS = 5
 
         # Constants
         self.MAX_CELL_COUNT = max_cells
@@ -133,7 +133,7 @@ class Env:
     def handle_cell_cycle(self):
         cycle_length = self.CELL_CYCLE_DURATION[None]
         g1_end = max(1, int(0.4 * cycle_length))
-        s_end  = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
+        s_end = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
         g2_end = max(s_end + 1, s_end + max(1, int(0.17 * cycle_length)))
         if g2_end > cycle_length:
             g2_end = cycle_length

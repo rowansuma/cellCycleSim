@@ -6,7 +6,7 @@ import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 120000, 24, 0.05]
+defaults = [0.002, 100000, 24, 0.05]
 display_phase = True
 write_csv = True
 
@@ -37,6 +37,8 @@ env.initialize_board()
 
 LMB_down = False
 
+hour = 0
+
 fieldnames = ["step", "population"]
 
 with open('data.csv', 'w') as csv_file:
@@ -63,7 +65,7 @@ while gui.running:
                 LMB_down = True
             elif e.type == ti.GUI.RELEASE:
                 LMB_down = False
-        if e.key == ti.GUI.RMB:
+        if e.key == ti.GUI.RMB and e.type == ti.GUI.PRESS:
             env.create_cell(mouse_pos[0], mouse_pos[1])
 
     # Deletion
@@ -98,9 +100,14 @@ while gui.running:
             csv_writer.writerow(info)
 
 
+
+
     warn = ""
     if env.cellsAlive[None] == env.MAX_CELL_COUNT:
         warn = " | Warning: Max Cell Count Reached!"
     if env.step[None] % 10 == 0:
-        print("Step: " + str(env.step[None]) + " | Cells: " + str(env.cellsAlive[None]) + warn)
+        print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.cellsAlive[None]) + warn)
+
+    hour += 24/env.CELL_CYCLE_DURATION[None]
+
     env.step[None] += 1
