@@ -12,11 +12,14 @@ class Env:
         self.CELL_RADIUS = radius
         self.CELL_RADIUS_SCALAR = 1.0 # Increase for better visibility at larger scale
         if self.CELL_RADIUS <= 0.0002: self.CELL_RADIUS_SCALAR = 0.00024/self.CELL_RADIUS
-        self.CELL_REPULSION = 0.002 # how aggressively the cells repulse each other
-        self.INHIBITION_DISTANCE = 2.4
-        self.INHIBITION_COUNT = 4
+        self.CELL_REPULSION = 0.005 # how aggressively the cells repulse each other
+        self.INHIBITION_THRESHOLD = 1
+        self.INHIBITION_EXIT_THRESHOLD = 0.2  # Hysteresis for G0 exit
+        self.INHIBITION_FACTOR = 0.05
         self.REPRODUCTION_OFFSET = 1.5
         self.SCALPEL_RADIUS = scalpel_size
+
+        self.MAX_CELL_SPEED = 0.002*self.CELL_RADIUS
 
         self.GRID_SCALE_FACTOR = 1.5
         self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
@@ -25,8 +28,10 @@ class Env:
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
+        self.cellCycleField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)  # Per-cell cycle duration
 
         self.PHASE_COLORS = np.array([0x858585, 0x66ccff, 0xffcc66, 0x66ff66, 0xff6699], dtype=np.uint32)
+
 
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
@@ -36,8 +41,9 @@ class Env:
         self.posField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Current Pos
         self.prevPosField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Previous Pos
         self.lastDivField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
-        self.neighborsField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.inhibitionField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.phaseField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.mvmtField = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
         # Grid
         self.grid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
@@ -47,8 +53,9 @@ class Env:
         self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.prevPosFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.lastDivFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
-        self.neighborsFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.inhibitionFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.phaseFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.mvmtFieldBuffer = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
         # Deletion
         self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
@@ -66,13 +73,20 @@ class Env:
             self.posField[index] = [-1, -1]
             self.prevPosField[index] = self.posField[index]
             self.lastDivField[index] = -1
-            self.neighborsField[index] = -1
+            self.inhibitionField[index] = -1
             self.phaseField[index] = -1
+            self.mvmtField[index] = [-1, -1, -1]
+            # Add random variation to cell cycle duration
+            base = self.CCDPlaceholder
+            variation = int((ti.random() - 0.5) * 10)  # [-5, 5]
+            self.cellCycleField[index] = base + variation
         self.posField[0] = [0.5, 0.5] # Init First Cell
         self.prevPosField[0] = self.posField[0]
         self.lastDivField[0] = 0
-        self.neighborsField[0] = 0
+        self.inhibitionField[0] = 0
         self.phaseField[0] = 1
+        self.mvmtField[0] = [0, -1, self.MAX_CELL_SPEED]
+        # Already set cellCycleField[0] above
 
 
     @ti.kernel
@@ -85,7 +99,6 @@ class Env:
     @ti.kernel
     def border_constraints(self): # Stop cells from exiting view
         for i in range(self.cellsAlive[None]):
-            self.neighborsField[i] = 0
             at_border = False
             for j in ti.static(range(2)):
                 if self.posField[i][j] < 0:
@@ -99,9 +112,25 @@ class Env:
                     v = self.posField[i][j] - self.prevPosField[i][j]
                     self.prevPosField[i][j] = self.posField[i][j] + v * 0.5
                     at_border = True
-            if at_border:
-                self.neighborsField[i] += 2
 
+    @ti.kernel
+    def apply_locomotion(self):
+        for i in range(self.cellsAlive[None]):
+            if ti.random() < 0.3:
+                r = ti.random()
+                val = 0
+                if r < 1/3:
+                    val = -1
+                elif r < 2/3:
+                    val = 0
+                else:
+                    val = 1
+                self.mvmtField[i][1] = val
+
+            self.mvmtField[i][0] += self.mvmtField[i][1] * 0.01
+            angle = self.mvmtField[i][0] * 2 * ti.math.pi
+            mvmtVector = self.mvmtField[i][2] * ti.Vector([ti.cos(angle), ti.sin(angle)])
+            self.posField[i] += mvmtVector
 
     @ti.kernel
     def handle_collisions(self): # Collisions
@@ -110,6 +139,7 @@ class Env:
             gridcell_x = ti.min(ti.max(int(pos_i[0] * self.GRID_RES), 0), self.GRID_RES - 1)
             gridcell_y = ti.min(ti.max(int(pos_i[1] * self.GRID_RES), 0), self.GRID_RES - 1)
 
+            has_neighbors = False
             for offset in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
                 cx = gridcell_x + offset[0]
                 cy = gridcell_y + offset[1]
@@ -125,25 +155,34 @@ class Env:
                                 movementOffset = self.CELL_RADIUS * self.CELL_REPULSION * ((min_dist - dist) / min_dist) * dx.normalized()
                                 self.posField[i] += movementOffset
                                 self.posField[other] -= movementOffset
-                            if dist <= self.INHIBITION_DISTANCE * self.CELL_RADIUS:
-                                self.neighborsField[i] += 1
+                            if 1.99*self.CELL_RADIUS > dist > 1e-5:
+                                self.inhibitionField[i] += self.INHIBITION_FACTOR
+                                if self.inhibitionField[i] > self.INHIBITION_THRESHOLD:
+                                    self.inhibitionField[i] = self.INHIBITION_THRESHOLD
+                                has_neighbors = True
+            
+            # Only reduce inhibition once per cell per step if no neighbors found
+            if not has_neighbors:
+                self.inhibitionField[i] -= self.INHIBITION_FACTOR
+
 
 
     @ti.kernel
     def handle_cell_cycle(self):
-        cycle_length = self.CELL_CYCLE_DURATION[None]
-        g1_end = max(1, int(0.4 * cycle_length))
-        s_end = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
-        g2_end = max(s_end + 1, s_end + max(1, int(0.17 * cycle_length)))
-        if g2_end > cycle_length:
-            g2_end = cycle_length
-        early_g1_end = max(2, g1_end // 3)
-
+        # Use per-cell cycle duration
         for i in range(self.cellsAlive[None]):
+            cycle_length = self.cellCycleField[i]
+            g1_end = max(1, int(0.4 * cycle_length))
+            s_end = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
+            g2_end = max(s_end + 1, s_end + max(1, int(0.17 * cycle_length)))
+            if g2_end > cycle_length:
+                g2_end = cycle_length
+            early_g1_end = max(2, g1_end // 20)
+
             cycleTime = self.step[None] - self.lastDivField[i]
             prev_phase = self.phaseField[i]
             if prev_phase == 0:  # If in G0, stay in G0 until contact inhibition is relieved
-                if self.neighborsField[i] < self.INHIBITION_COUNT:
+                if self.inhibitionField[i] < self.INHIBITION_EXIT_THRESHOLD:
                     # Leaving G0, reset cycle and enter G1
                     self.phaseField[i] = 1
                     self.lastDivField[i] = self.step[None]
@@ -152,7 +191,7 @@ class Env:
                     self.phaseField[i] = 0  # Stay in G0
             else:
                 # Only allow entry to G0 during early G1
-                if cycleTime < early_g1_end and self.neighborsField[i] >= self.INHIBITION_COUNT:
+                if cycleTime < early_g1_end and self.inhibitionField[i] >= self.INHIBITION_THRESHOLD:
                     self.phaseField[i] = 0  # Enter G0
                 elif cycleTime < g1_end:
                     self.phaseField[i] = 1  # G1
@@ -162,6 +201,16 @@ class Env:
                     self.phaseField[i] = 3  # G2
                 else:
                     self.phaseField[i] = 4  # M
+
+            if self.phaseField[i] == 3 or self.phaseField[i] == 0:
+                self.mvmtField[i][2] -= self.MAX_CELL_SPEED/40
+                if self.mvmtField[i][2] < 0:
+                    self.mvmtField[i][2] = 0
+
+            if self.phaseField[i] == 1:
+                self.mvmtField[i][2] += self.MAX_CELL_SPEED/10
+                if self.mvmtField[i][2] > self.MAX_CELL_SPEED:
+                    self.mvmtField[i][2] = self.MAX_CELL_SPEED
 
             # Cell Division
             if self.phaseField[i] == 4 and cycleTime >= cycle_length:
@@ -180,8 +229,13 @@ class Env:
                     self.prevPosField[new_idx] = new_pos
                     self.lastDivField[new_idx] = self.step[None]
                     self.lastDivField[i] = self.step[None]
-                    self.neighborsField[new_idx] = 0
+                    self.inhibitionField[new_idx] = 0
                     self.phaseField[new_idx] = 1
+                    self.mvmtField[new_idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
+                    # Assign random cycle duration to new cell
+                    base = self.CCDPlaceholder
+                    variation = int((ti.random() - 0.5) * 20)  # [-5, 5]
+                    self.cellCycleField[new_idx] = base + variation
 
     @ti.kernel
     def create_cell(self, posX: ti.f32, posY: ti.f32):
@@ -193,8 +247,13 @@ class Env:
                 self.posField[new_idx] = new_pos
                 self.prevPosField[new_idx] = new_pos
                 self.lastDivField[new_idx] = self.step[None]
-                self.neighborsField[new_idx] = 0
+                self.inhibitionField[new_idx] = 0
                 self.phaseField[new_idx] = 1
+                self.mvmtField[new_idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
+                # Assign random cycle duration to new cell
+                base = self.CCDPlaceholder
+                variation = int((ti.random() - 0.5) * 20)  # [-5, 5]
+                self.cellCycleField[new_idx] = base + variation
 
     @ti.kernel
     def clear_grid(self): # Clear the grid
@@ -237,8 +296,9 @@ class Env:
                 self.posFieldBuffer[idx] = self.posField[i]
                 self.prevPosFieldBuffer[idx] = self.prevPosField[i]
                 self.lastDivFieldBuffer[idx] = self.lastDivField[i]
-                self.neighborsFieldBuffer[idx] = self.neighborsField[i]
+                self.inhibitionFieldBuffer[idx] = self.inhibitionField[i]
                 self.phaseFieldBuffer[idx] = self.phaseField[i]
+                self.mvmtFieldBuffer[idx] = self.mvmtField[i]
 
     @ti.kernel
     def copy_back_buffer(self): # Write the buffer cells back to main fields
@@ -247,12 +307,14 @@ class Env:
             self.posField[i] = self.posFieldBuffer[i]
             self.prevPosField[i] = self.prevPosFieldBuffer[i]
             self.lastDivField[i] = self.lastDivFieldBuffer[i]
-            self.neighborsField[i] = self.neighborsFieldBuffer[i]
+            self.inhibitionField[i] = self.inhibitionFieldBuffer[i]
             self.phaseField[i] = self.phaseFieldBuffer[i]
+            self.mvmtField[i] = self.mvmtFieldBuffer[i]
         for i in range(n, self.cellsAlive[None]):
             self.posField[i] = [-1, -1]
             self.prevPosField[i] = [-1, -1]
             self.lastDivField[i] = -1
-            self.neighborsField[i] = -1
+            self.inhibitionField[i] = -1
             self.phaseField[i] = -1
+            self.mvmtField[i] = [-1, -1, -1]
         self.cellsAlive[None] = n

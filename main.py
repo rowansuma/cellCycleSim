@@ -6,7 +6,7 @@ import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 100000, 24, 0.05]
+defaults = [0.002, 100000, 240, 0.05]
 display_phase = True
 write_csv = True
 
@@ -52,6 +52,7 @@ while gui.running:
         env.border_constraints()
         env.clear_grid()
         env.insert_into_grid()
+        env.apply_locomotion()
         env.handle_collisions()
     env.handle_cell_cycle()
     env.clamp_cell_count()
