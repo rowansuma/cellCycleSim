@@ -28,10 +28,27 @@ class Env:
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
-        self.cellCycleField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)  # Per-cell cycle duration
 
         self.PHASE_COLORS = np.array([0x858585, 0x66ccff, 0xffcc66, 0x66ff66, 0xff6699], dtype=np.uint32)
 
+        self.GENE_POINTS = ti.Vector.field(2, dtype=ti.f32, shape=(11, 2))
+        gene_points = np.array([
+            [[6, 0.3], [28, 1]], # ORC1
+            [[28, 1], [49, 0.3]], # CCNE1
+            [[30, 1], [46, 0.3]], # CCNE2
+            [[4, 0.3], [29, 0.9]], # MCM6
+            [[15, 0.1], [45, 1]], # WEE1
+            [[18, 0.3], [46, 1]], # CDK1
+            [[20, 0.4], [45, 1]], # CCNF
+            [[19, 0.2], [45, 0.9]], # NUSAP1
+            [[22, 0.4], [47, 1]], # AURKA
+            [[18, 0.2], [46, 0.8]], # CCNA2
+            [[4, 0.8], [30, 0.3]] # CCNB2
+        ], dtype=np.float32)
+        self.GENE_POINTS.from_numpy(gene_points)
+
+        self.GENE_VARIATION = 0.002
+        self.GENE_CYCLE_LENGTH = 50
 
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
@@ -44,6 +61,8 @@ class Env:
         self.inhibitionField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.phaseField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
         self.mvmtField = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.cycleDurField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)  # Cycle duration
+        self.geneField = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
         # Grid
         self.grid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
@@ -56,6 +75,8 @@ class Env:
         self.inhibitionFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.phaseFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
         self.mvmtFieldBuffer = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.cycleDurFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.geneFieldBuffer = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
         # Deletion
         self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
@@ -76,18 +97,83 @@ class Env:
             self.inhibitionField[index] = -1
             self.phaseField[index] = -1
             self.mvmtField[index] = [-1, -1, -1]
-            # Add random variation to cell cycle duration
-            base = self.CCDPlaceholder
-            variation = int((ti.random() - 0.5) * 10)  # [-5, 5]
-            self.cellCycleField[index] = base + variation
+            self.cycleDurField[index] = -1
+            self.geneField[index] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
         self.posField[0] = [0.5, 0.5] # Init First Cell
         self.prevPosField[0] = self.posField[0]
         self.lastDivField[0] = 0
         self.inhibitionField[0] = 0
         self.phaseField[0] = 1
         self.mvmtField[0] = [0, -1, self.MAX_CELL_SPEED]
-        # Already set cellCycleField[0] above
+        self.cycleDurField[0] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
+        self.calc_starting_genes(0)
 
+    @ti.func
+    def calc_starting_genes(self, idx: ti.i32):
+        for gene_idx in range(11):
+            firstPoint = self.GENE_POINTS[gene_idx, 0]
+            lastPoint = self.GENE_POINTS[gene_idx, 1]
+            beforePoint = (lastPoint[0]-self.GENE_CYCLE_LENGTH, lastPoint[1])
+            m = (firstPoint[1]-beforePoint[1]) / (firstPoint[0]-beforePoint[0])
+            b = firstPoint[1] - m * firstPoint[0]
+            self.geneField[idx][gene_idx] = b
+        ti.static_print(self.geneField[idx])
+
+    @ti.func
+    def update_genes(self, idx: ti.i32):
+        cycleTime = (self.step[None] - self.lastDivField[idx]) / self.CELL_CYCLE_DURATION[None]
+        for gene_idx in range(11):
+            # Find last and next points
+            last_x = -float('inf')
+            next_x = float('inf')
+            last_point = ti.Vector([0.0, 0.0])
+            next_point = ti.Vector([0.0, 0.0])
+            max_x = -float('inf')
+            min_x = float('inf')
+            max_point = ti.Vector([0.0, 0.0])
+            min_point = ti.Vector([0.0, 0.0])
+
+            # Normalize points
+            for point_idx in range(2):
+                point = self.GENE_POINTS[gene_idx, point_idx]
+                x = point[0] / 50
+                y = point[1]
+                if cycleTime >= x > last_x:
+                    last_x = x
+                    last_point = ti.Vector([x, y])
+                if cycleTime <= x < next_x:
+                    next_x = x
+                    next_point = ti.Vector([x, y])
+                if x > max_x:
+                    max_x = x
+                    max_point = ti.Vector([x, y])
+                if x < min_x:
+                    min_x = x
+                    min_point = ti.Vector([x, y])
+
+            # Edge cases
+            if last_x == -float('inf'):
+                last_point = ti.Vector([max_x - 1.0, max_point[1]])
+            if next_x == float('inf'):
+                next_point = ti.Vector([min_x + 1.0, min_point[1]])
+
+            x0 = last_point[0]
+            y0 = last_point[1]
+            x1 = next_point[0]
+            y1 = next_point[1]
+
+            if x1 != x0 and x0 <= cycleTime <= x1:
+                increment = (y1 - y0) / (x1 - x0) / self.CELL_CYCLE_DURATION[None]
+                # Add small random variation
+                noise = (ti.random() - 0.5) * self.GENE_VARIATION
+                self.geneField[idx][gene_idx] += increment + noise
+                if (y0 < y1 < self.geneField[idx][gene_idx]) or (y0 > y1 > self.geneField[idx][gene_idx]):
+                    self.geneField[idx][gene_idx] = y1
+            elif cycleTime < x0:
+                self.geneField[idx][gene_idx] = y0
+            elif cycleTime > x1:
+                self.geneField[idx][gene_idx] = y1
 
     @ti.kernel
     def verlet_step(self): # Verlet Calculations for Motion (velocity calc)
@@ -160,18 +246,16 @@ class Env:
                                 if self.inhibitionField[i] > self.INHIBITION_THRESHOLD:
                                     self.inhibitionField[i] = self.INHIBITION_THRESHOLD
                                 has_neighbors = True
-            
+
             # Only reduce inhibition once per cell per step if no neighbors found
             if not has_neighbors:
                 self.inhibitionField[i] -= self.INHIBITION_FACTOR
-
-
 
     @ti.kernel
     def handle_cell_cycle(self):
         # Use per-cell cycle duration
         for i in range(self.cellsAlive[None]):
-            cycle_length = self.cellCycleField[i]
+            cycle_length = self.cycleDurField[i]
             g1_end = max(1, int(0.4 * cycle_length))
             s_end = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
             g2_end = max(s_end + 1, s_end + max(1, int(0.17 * cycle_length)))
@@ -179,6 +263,7 @@ class Env:
                 g2_end = cycle_length
             early_g1_end = max(2, g1_end // 20)
 
+            # Phase Switching
             cycleTime = self.step[None] - self.lastDivField[i]
             prev_phase = self.phaseField[i]
             if prev_phase == 0:  # If in G0, stay in G0 until contact inhibition is relieved
@@ -202,6 +287,7 @@ class Env:
                 else:
                     self.phaseField[i] = 4  # M
 
+            # Cell Movement
             if self.phaseField[i] == 3 or self.phaseField[i] == 0:
                 self.mvmtField[i][2] -= self.MAX_CELL_SPEED/40
                 if self.mvmtField[i][2] < 0:
@@ -232,10 +318,11 @@ class Env:
                     self.inhibitionField[new_idx] = 0
                     self.phaseField[new_idx] = 1
                     self.mvmtField[new_idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
-                    # Assign random cycle duration to new cell
-                    base = self.CCDPlaceholder
-                    variation = int((ti.random() - 0.5) * 20)  # [-5, 5]
-                    self.cellCycleField[new_idx] = base + variation
+                    self.cycleDurField[new_idx] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
+                    self.calc_starting_genes(new_idx)
+
+            # Update Genes
+            self.update_genes(i)
 
     @ti.kernel
     def create_cell(self, posX: ti.f32, posY: ti.f32):
@@ -250,10 +337,8 @@ class Env:
                 self.inhibitionField[new_idx] = 0
                 self.phaseField[new_idx] = 1
                 self.mvmtField[new_idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
-                # Assign random cycle duration to new cell
-                base = self.CCDPlaceholder
-                variation = int((ti.random() - 0.5) * 20)  # [-5, 5]
-                self.cellCycleField[new_idx] = base + variation
+                self.cycleDurField[new_idx] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
+                self.calc_starting_genes(new_idx)
 
     @ti.kernel
     def clear_grid(self): # Clear the grid
@@ -299,6 +384,8 @@ class Env:
                 self.inhibitionFieldBuffer[idx] = self.inhibitionField[i]
                 self.phaseFieldBuffer[idx] = self.phaseField[i]
                 self.mvmtFieldBuffer[idx] = self.mvmtField[i]
+                self.cycleDurFieldBuffer[idx] = self.cycleDurField[i]
+                self.geneFieldBuffer[idx] = self.geneField[i]
 
     @ti.kernel
     def copy_back_buffer(self): # Write the buffer cells back to main fields
@@ -310,6 +397,8 @@ class Env:
             self.inhibitionField[i] = self.inhibitionFieldBuffer[i]
             self.phaseField[i] = self.phaseFieldBuffer[i]
             self.mvmtField[i] = self.mvmtFieldBuffer[i]
+            self.cycleDurField[i] = self.cycleDurFieldBuffer[i]
+            self.geneField[i] = self.geneFieldBuffer[i]
         for i in range(n, self.cellsAlive[None]):
             self.posField[i] = [-1, -1]
             self.prevPosField[i] = [-1, -1]
@@ -317,4 +406,6 @@ class Env:
             self.inhibitionField[i] = -1
             self.phaseField[i] = -1
             self.mvmtField[i] = [-1, -1, -1]
+            self.cycleDurField[i] = -1
+            self.geneField[i] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
         self.cellsAlive[None] = n

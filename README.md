@@ -25,11 +25,12 @@ Made by Rowan Sumanaweera
 - [x] Add Deletion Tool
 - [x] Implement Cell Cycle Stages
 - [x] Tweak Contact Inhibition
-- [ ] Move on from circles?
+- [x] Add Fibroblast Motility
+- [x] Add Gene Expression
 
 ## Usage
 
-1. Run plot.py to create MatPlotLib window for real-time graphing
+1. Run plot.py and plot2.py to create MatPlotLib window for real-time graphing
 2. Run main.py to open the simulation, input simulation parameters.
 3. Hold down Left Click to delete cells within a radius
 4. Press Right Click to create a cell
