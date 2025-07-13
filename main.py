@@ -39,7 +39,7 @@ LMB_down = False
 
 hour = 0
 
-fieldnames = ["step", "population"]
+fieldnames = ["step", "population", "gene0", "gene1", "gene2", "gene3", "gene4", "gene5", "gene6", "gene7", "gene8", "gene9", "gene10"]
 
 with open('data.csv', 'w') as csv_file:
     csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -56,6 +56,7 @@ while gui.running:
         env.handle_collisions()
     env.handle_cell_cycle()
     env.clamp_cell_count()
+    print("Gene field values:", env.geneField.to_numpy()[0])
 
     # Mouse Button Handling
     mouse_pos = gui.get_cursor_pos()
@@ -96,7 +97,18 @@ while gui.running:
 
             info = {
                 "step": env.step[None],
-                "population": env.cellsAlive[None]
+                "population": env.cellsAlive[None],
+                "gene0": env.geneField[0][0],
+                "gene1": env.geneField[0][1],
+                "gene2": env.geneField[0][2],
+                "gene3": env.geneField[0][3],
+                "gene4": env.geneField[0][4],
+                "gene5": env.geneField[0][5],
+                "gene6": env.geneField[0][6],
+                "gene7": env.geneField[0][7],
+                "gene8": env.geneField[0][8],
+                "gene9": env.geneField[0][9],
+                "gene10": env.geneField[0][10],
             }
             csv_writer.writerow(info)
 
