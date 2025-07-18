@@ -27,6 +27,13 @@ Made by Rowan Sumanaweera
 - [x] Tweak Contact Inhibition
 - [x] Add Fibroblast Motility
 - [x] Add Gene Expression
+- [ ] Make Cells Elliptical
+- [ ] Add ECM Particles and ECM Behavior
+- [ ] Add Variable Cell Motion
+- [ ] Make Gene Expression Peaks Variable
+- [ ] Add Input Parameters YAML File
+- [ ] Modify Gene Expression to Use Real Data
+- [ ] Make Gene Expression Determine Cell Cycle
 
 ## Usage
 
