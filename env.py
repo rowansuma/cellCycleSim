@@ -18,13 +18,17 @@ class Env:
         self.INHIBITION_FACTOR = 0.05
         self.REPRODUCTION_OFFSET = 1.5
         self.SCALPEL_RADIUS = scalpel_size
-
         self.MAX_CELL_SPEED = 0.002*self.CELL_RADIUS
 
         self.GRID_SCALE_FACTOR = 1.5
         self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
         self.MAX_PARTICLES_PER_GRID_CELL = 8
         self.FRICTION = 0.95
+
+        self.MIN_ECM_PERIOD = 20
+        self.MAX_ECM_COUNT = 1000000
+        self.ECM_DETECTION_RADIUS = 3*self.CELL_RADIUS
+        self.ECM_THRESHOLD = 20
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
@@ -47,12 +51,21 @@ class Env:
         ], dtype=np.float32)
         self.GENE_POINTS.from_numpy(gene_points)
 
-        self.GENE_VARIATION = 0.002
+        self.GENE_VARIATION = 0.02
         self.GENE_CYCLE_LENGTH = 50
 
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
         self.cellsAlive = ti.field(dtype=ti.i32, shape=()) # 1
+        self.ecmCount = ti.field(dtype=ti.i32, shape=()) # 0
+
+        # Grid
+        self.grid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
+        self.gridCount = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES))  # how many particles per cell
+
+        # ECM Grid
+        self.ecmGrid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
+        self.ecmGridCount = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES))
 
         # Cell Info
         self.posField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Current Pos
@@ -63,10 +76,8 @@ class Env:
         self.mvmtField = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.cycleDurField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)  # Cycle duration
         self.geneField = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
-
-        # Grid
-        self.grid = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES, self.MAX_PARTICLES_PER_GRID_CELL))
-        self.gridCount = ti.field(dtype=ti.i32, shape=(self.GRID_RES, self.GRID_RES))  # how many particles per cell
+        self.lastECMField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.ecmPeriodField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
         # Cell Info Buffers
         self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
@@ -77,6 +88,11 @@ class Env:
         self.mvmtFieldBuffer = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.cycleDurFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
         self.geneFieldBuffer = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+        self.lastECMFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.ecmPeriodFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+
+        # ECM Info
+        self.ecmPosField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_ECM_COUNT) # Current Pos
 
         # Deletion
         self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
@@ -87,6 +103,7 @@ class Env:
     @ti.kernel
     def initialize_board(self): # Board Init, assign taichi fields
         self.cellsAlive[None] = 1
+        self.ecmCount[None] = 0
         self.CELL_CYCLE_DURATION[None] = self.CCDPlaceholder
         self.step[None] = 0
 
@@ -99,6 +116,8 @@ class Env:
             self.mvmtField[index] = [-1, -1, -1]
             self.cycleDurField[index] = -1
             self.geneField[index] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+            self.lastECMField[index] = -1
+            self.ecmPeriodField[index] = -1
 
         self.posField[0] = [0.5, 0.5] # Init First Cell
         self.prevPosField[0] = self.posField[0]
@@ -107,6 +126,8 @@ class Env:
         self.phaseField[0] = 1
         self.mvmtField[0] = [0, -1, self.MAX_CELL_SPEED]
         self.cycleDurField[0] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
+        self.lastECMField[0] = 0
+        self.ecmPeriodField[0] = 0
         self.calc_starting_genes(0)
 
     @ti.func
@@ -297,6 +318,37 @@ class Env:
                 self.mvmtField[i][2] += self.MAX_CELL_SPEED/10
                 if self.mvmtField[i][2] > self.MAX_CELL_SPEED:
                     self.mvmtField[i][2] = self.MAX_CELL_SPEED
+                
+            # ECM PERIOD CALCULATIONS
+            ecm_nearby_count = 0
+            pos_i = self.posField[i]
+            gridcell_x = ti.min(ti.max(int(pos_i[0] * self.GRID_RES), 0), self.GRID_RES - 1)
+            gridcell_y = ti.min(ti.max(int(pos_i[1] * self.GRID_RES), 0), self.GRID_RES - 1)
+            for offset in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+                cx = gridcell_x + offset[0]
+                cy = gridcell_y + offset[1]
+                if 0 <= cx < self.GRID_RES and 0 <= cy < self.GRID_RES:
+                    count = self.ecmGridCount[cx, cy]
+                    for j in range(count):
+                        ecm_idx = self.ecmGrid[cx, cy, j]
+                        dx = pos_i - self.ecmPosField[ecm_idx]
+                        dist = dx.norm()
+                        if dist < self.ECM_DETECTION_RADIUS:
+                            ecm_nearby_count += 1
+            self.ecmPeriodField[i] = self.MIN_ECM_PERIOD+ecm_nearby_count
+            if self.ecmPeriodField[i] > self.ECM_THRESHOLD:
+                self.ecmPeriodField[i] = 99999999
+
+            # ECM Deposition
+            ecmTime = self.step[None] - self.lastECMField[i]
+            if ecmTime >= self.ecmPeriodField[i]:
+                current = ti.atomic_add(self.ecmCount[None], 0)
+                if current + 1 < self.MAX_ECM_COUNT:  # Safe Addition
+                    ecm_idx = ti.atomic_add(self.ecmCount[None], 1)
+                    if ecm_idx < self.MAX_ECM_COUNT:
+                        ecm_pos = self.posField[i]
+                        self.initialize_ecm_fields(ecm_idx, ecm_pos)
+                        self.lastECMField[i]= self.step[None]
 
             # Cell Division
             if self.phaseField[i] == 4 and cycleTime >= cycle_length:
@@ -311,15 +363,8 @@ class Env:
                         ti.random() * offset_range - offset_range * 0.5
                     ])
                     new_pos = self.posField[i] + offset
-                    self.posField[new_idx] = new_pos
-                    self.prevPosField[new_idx] = new_pos
-                    self.lastDivField[new_idx] = self.step[None]
+                    self.initialize_cell_fields(new_idx, new_pos)
                     self.lastDivField[i] = self.step[None]
-                    self.inhibitionField[new_idx] = 0
-                    self.phaseField[new_idx] = 1
-                    self.mvmtField[new_idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
-                    self.cycleDurField[new_idx] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
-                    self.calc_starting_genes(new_idx)
 
             # Update Genes
             self.update_genes(i)
@@ -331,14 +376,24 @@ class Env:
             new_idx = ti.atomic_add(self.cellsAlive[None], 1)
             if new_idx < self.MAX_CELL_COUNT:
                 new_pos = [posX, posY]
-                self.posField[new_idx] = new_pos
-                self.prevPosField[new_idx] = new_pos
-                self.lastDivField[new_idx] = self.step[None]
-                self.inhibitionField[new_idx] = 0
-                self.phaseField[new_idx] = 1
-                self.mvmtField[new_idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
-                self.cycleDurField[new_idx] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
-                self.calc_starting_genes(new_idx)
+                self.initialize_cell_fields(new_idx, new_pos)
+
+    @ti.func
+    def initialize_cell_fields(self, idx: ti.i32, pos: ti.template()):
+        self.posField[idx] = pos
+        self.prevPosField[idx] = pos
+        self.lastDivField[idx] = self.step[None]
+        self.inhibitionField[idx] = 0
+        self.phaseField[idx] = 1
+        self.mvmtField[idx] = [ti.random(), 0, self.MAX_CELL_SPEED]
+        self.cycleDurField[idx] = self.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
+        self.lastECMField[idx] = self.step[None]
+        self.ecmPeriodField[idx] = 0
+        self.calc_starting_genes(idx)
+
+    @ti.func
+    def initialize_ecm_fields(self, idx: ti.i32, pos: ti.template()):
+        self.ecmPosField[idx] = pos
 
     @ti.kernel
     def clear_grid(self): # Clear the grid
@@ -386,6 +441,8 @@ class Env:
                 self.mvmtFieldBuffer[idx] = self.mvmtField[i]
                 self.cycleDurFieldBuffer[idx] = self.cycleDurField[i]
                 self.geneFieldBuffer[idx] = self.geneField[i]
+                self.lastECMFieldBuffer[idx] = self.lastECMField[i]
+                self.ecmPeriodFieldBuffer[idx] = self.ecmPeriodField[i]
 
     @ti.kernel
     def copy_back_buffer(self): # Write the buffer cells back to main fields
@@ -399,13 +456,21 @@ class Env:
             self.mvmtField[i] = self.mvmtFieldBuffer[i]
             self.cycleDurField[i] = self.cycleDurFieldBuffer[i]
             self.geneField[i] = self.geneFieldBuffer[i]
-        for i in range(n, self.cellsAlive[None]):
-            self.posField[i] = [-1, -1]
-            self.prevPosField[i] = [-1, -1]
-            self.lastDivField[i] = -1
-            self.inhibitionField[i] = -1
-            self.phaseField[i] = -1
-            self.mvmtField[i] = [-1, -1, -1]
-            self.cycleDurField[i] = -1
-            self.geneField[i] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+            self.lastECMField[i] = self.lastECMFieldBuffer[i]
+            self.ecmPeriodField[i] = self.ecmPeriodFieldBuffer[i]
         self.cellsAlive[None] = n
+
+    @ti.kernel
+    def clear_ecm_grid(self):
+        for i in ti.grouped(self.ecmGridCount):
+            self.ecmGridCount[i] = 0
+
+    @ti.kernel
+    def insert_ecm_into_grid(self):
+        for i in range(self.ecmCount[None]):
+            pos = self.ecmPosField[i]
+            cell_x = ti.min(ti.max(int(pos[0] * self.GRID_RES), 0), self.GRID_RES - 1)
+            cell_y = ti.min(ti.max(int(pos[1] * self.GRID_RES), 0), self.GRID_RES - 1)
+            index = ti.atomic_add(self.ecmGridCount[cell_x, cell_y], 1)
+            if index < self.MAX_PARTICLES_PER_GRID_CELL:
+                self.ecmGrid[cell_x, cell_y, index] = i
