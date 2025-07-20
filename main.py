@@ -6,7 +6,7 @@ import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 100000, 240, 0.05]
+defaults = [0.002, 100000, 120, 0.05]
 display_phase = True
 write_csv = True
 
@@ -39,7 +39,7 @@ LMB_down = False
 
 hour = 0
 
-fieldnames = ["step", "population", "gene0", "gene1", "gene2", "gene3", "gene4", "gene5", "gene6", "gene7", "gene8", "gene9", "gene10"]
+fieldnames = ["step", "population", "ecm", "gene0", "gene1", "gene2", "gene3", "gene4", "gene5", "gene6", "gene7", "gene8", "gene9", "gene10"]
 
 with open('data.csv', 'w') as csv_file:
     csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -54,9 +54,11 @@ while gui.running:
         env.insert_into_grid()
         env.apply_locomotion()
         env.handle_collisions()
+    env.clear_ecm_grid()
+    env.insert_ecm_into_grid()
     env.handle_cell_cycle()
     env.clamp_cell_count()
-    print("Gene field values:", env.geneField.to_numpy()[0])
+    print("ECM:", env.ecmCount[None])
 
     # Mouse Button Handling
     mouse_pos = gui.get_cursor_pos()
@@ -75,6 +77,8 @@ while gui.running:
         env.mark_for_deletion(mouse_pos[0], mouse_pos[1], env.SCALPEL_RADIUS)
         env.write_buffer_cells()
         env.copy_back_buffer()
+
+    gui.circles(env.ecmPosField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0x252345)
 
     if display_phase:
         positions = env.posField.to_numpy()[:env.cellsAlive[None]]
@@ -98,6 +102,7 @@ while gui.running:
             info = {
                 "step": env.step[None],
                 "population": env.cellsAlive[None],
+                "ecm": env.ecmCount[None],
                 "gene0": env.geneField[0][0],
                 "gene1": env.geneField[0][1],
                 "gene2": env.geneField[0][2],
