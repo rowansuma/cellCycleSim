@@ -6,7 +6,7 @@ import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 100000, 120, 0.05]
+defaults = [0.002, 150000, 120, 0.05]
 display_phase = True
 write_csv = True
 
@@ -75,10 +75,17 @@ while gui.running:
     # Deletion
     if LMB_down and mouse_pos is not None:
         env.mark_for_deletion(mouse_pos[0], mouse_pos[1], env.SCALPEL_RADIUS)
+        env.mark_ecm_for_deletion(mouse_pos[0], mouse_pos[1], env.SCALPEL_RADIUS)
         env.write_buffer_cells()
+        env.write_buffer_ecm()
         env.copy_back_buffer()
+        env.copy_back_buffer_ecm()
 
-    gui.circles(env.ecmPosField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0x252345)
+    gui.circles(
+        env.ecmPosField.to_numpy()[:env.ecmCount[None]],
+        radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
+        color=0x252345
+    )
 
     if display_phase:
         positions = env.posField.to_numpy()[:env.cellsAlive[None]]

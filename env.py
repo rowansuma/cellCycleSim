@@ -27,8 +27,9 @@ class Env:
 
         self.MIN_ECM_PERIOD = 20
         self.MAX_ECM_COUNT = 1000000
-        self.ECM_DETECTION_RADIUS = 3*self.CELL_RADIUS
-        self.ECM_THRESHOLD = 20
+        self.ECM_DETECTION_RADIUS = 8*self.CELL_RADIUS
+        self.ECM_THRESHOLD = 10
+        self.ECM_AVOIDANCE_STRENGTH = 0.00001  # Tweakable strength of ECM avoidance
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
@@ -93,9 +94,12 @@ class Env:
 
         # ECM Info
         self.ecmPosField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_ECM_COUNT) # Current Pos
+        self.ecmPosFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_ECM_COUNT)
+        self.bufferCountECM = ti.field(dtype=ti.i32, shape=())
 
         # Deletion
         self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
+        self.toDeleteECM = ti.field(dtype=ti.i32, shape=self.MAX_ECM_COUNT)
         self.bufferCount = ti.field(dtype=ti.i32, shape=())
 
         self.initialize_board()
@@ -336,7 +340,7 @@ class Env:
                         if dist < self.ECM_DETECTION_RADIUS:
                             ecm_nearby_count += 1
             self.ecmPeriodField[i] = self.MIN_ECM_PERIOD+ecm_nearby_count
-            if self.ecmPeriodField[i] > self.ECM_THRESHOLD:
+            if ecm_nearby_count > self.ECM_THRESHOLD:
                 self.ecmPeriodField[i] = 99999999
 
             # ECM Deposition
@@ -348,7 +352,7 @@ class Env:
                     if ecm_idx < self.MAX_ECM_COUNT:
                         ecm_pos = self.posField[i]
                         self.initialize_ecm_fields(ecm_idx, ecm_pos)
-                        self.lastECMField[i]= self.step[None]
+                        self.lastECMField[i] = self.step[None]
 
             # Cell Division
             if self.phaseField[i] == 4 and cycleTime >= cycle_length:
@@ -428,6 +432,17 @@ class Env:
                 self.toDelete[i] = 0
 
     @ti.kernel
+    def mark_ecm_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, scalpel_radius: ti.f32):
+        for i in range(self.ecmCount[None]):
+            dx = self.ecmPosField[i][0] - mouse_x
+            dy = self.ecmPosField[i][1] - mouse_y
+            dist = (dx * dx + dy * dy) ** 0.5
+            if dist < scalpel_radius:
+                self.toDeleteECM[i] = 1
+            else:
+                self.toDeleteECM[i] = 0
+
+    @ti.kernel
     def write_buffer_cells(self): # Write to-be-swapped cells to buffer
         self.bufferCount[None] = 0
         for i in range(self.cellsAlive[None]):
@@ -445,6 +460,14 @@ class Env:
                 self.ecmPeriodFieldBuffer[idx] = self.ecmPeriodField[i]
 
     @ti.kernel
+    def write_buffer_ecm(self):
+        self.bufferCountECM[None] = 0
+        for i in range(self.ecmCount[None]):
+            if self.toDeleteECM[i] == 0:
+                idx = ti.atomic_add(self.bufferCountECM[None], 1)
+                self.ecmPosFieldBuffer[idx] = self.ecmPosField[i]
+
+    @ti.kernel
     def copy_back_buffer(self): # Write the buffer cells back to main fields
         n = self.bufferCount[None]
         for i in range(n):
@@ -459,6 +482,13 @@ class Env:
             self.lastECMField[i] = self.lastECMFieldBuffer[i]
             self.ecmPeriodField[i] = self.ecmPeriodFieldBuffer[i]
         self.cellsAlive[None] = n
+
+    @ti.kernel
+    def copy_back_buffer_ecm(self):
+        n = self.bufferCountECM[None]
+        for i in range(n):
+            self.ecmPosField[i] = self.ecmPosFieldBuffer[i]
+        self.ecmCount[None] = n
 
     @ti.kernel
     def clear_ecm_grid(self):
