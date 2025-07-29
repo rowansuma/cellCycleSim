@@ -4,6 +4,54 @@ import os
 import shutil
 from env import Env
 import csv
+import socket
+import threading
+import subprocess
+import signal
+import atexit
+import sys
+
+# Start plot.py as a subprocess
+plot_proc = subprocess.Popen([sys.executable, "plot.py"])
+
+# Ensure it gets killed when main.py exits
+def cleanup():
+    print("Cleaning up: killing plot.py")
+    plot_proc.terminate()  # Send SIGTERM
+    try:
+        plot_proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        print("plot.py didn't terminate in time. Forcing kill.")
+        plot_proc.kill()
+
+def command_server():
+    global display_phase
+    global display_cells
+    global display_ecm
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(('localhost', 65432))  # Choose your port, must match client
+    server.listen()
+
+    print("Command server started, waiting for connections...")
+
+    while True:
+        conn, addr = server.accept()
+        with conn:
+            data = conn.recv(1024)
+            if not data:
+                continue
+            cmd = data.decode('utf-8').strip()
+            if cmd == "toggle_display_phase":
+                display_phase = not display_phase
+            if cmd == "toggle_display_cells":
+                display_cells = not display_cells
+            if cmd == "toggle_display_ecm":
+                display_ecm = not display_ecm
+            # You can add more commands here
+            conn.sendall(b'OK')
+
+
+atexit.register(cleanup)
 
 ti.init(arch=ti.gpu)
 
@@ -14,10 +62,13 @@ if not os.path.exists("config.toml"):
 with open('config.toml', 'rb') as f:
     config = tomli.load(f)
 
-
 display_phase = True
+display_cells = True
+display_ecm = True
+
 
 env = Env(config)
+threading.Thread(target=command_server, daemon=True).start()
 
 gui = ti.GUI("Cell Cycle Sim", res=env.SCREEN_SIZE)
 env.initialize_board()
@@ -69,25 +120,25 @@ while gui.running:
             env.write_buffer_ecm()
             env.copy_back_buffer_ecm()
 
-
-    gui.circles(
-        env.ecmPosField.to_numpy()[:env.ecmCount[None]],
-        radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
-        color=0x252345
-    )
-
-    if display_phase:
-        positions = env.posField.to_numpy()[:env.cellsAlive[None]]
-        phases = env.phaseField.to_numpy()[:env.cellsAlive[None]]
-        colors = env.PHASE_COLORS[phases]
-
+    if display_ecm:
         gui.circles(
-            positions,
+            env.ecmPosField.to_numpy()[:env.ecmCount[None]],
             radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
-            color=colors
+            color=0x252345
         )
-    else:
-        gui.circles(env.posField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0x66ccff)
+    if display_cells:
+        if display_phase:
+            positions = env.posField.to_numpy()[:env.cellsAlive[None]]
+            phases = env.phaseField.to_numpy()[:env.cellsAlive[None]]
+            colors = env.PHASE_COLORS[phases]
+
+            gui.circles(
+                positions,
+                radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
+                color=colors
+            )
+        else:
+            gui.circles(env.posField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0xffffff)
 
     # gui.arrows(
     #     orig=env.posField.to_numpy()[:env.cellsAlive[None]], direction=env.repulseField.to_numpy()[:env.cellsAlive[None]],
