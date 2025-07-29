@@ -3,57 +3,44 @@ import numpy as np
 
 @ti.data_oriented
 class Env:
-    def __init__(self, radius, max_cells, freq, scalpel_size):
+    def __init__(self, config):
         self.SCREEN_SIZE = (1000, 1000)
-        self.SUBSTEPS = 5
 
         # Constants
-        self.MAX_CELL_COUNT = max_cells
-        self.CELL_RADIUS = radius
-        self.CELL_RADIUS_SCALAR = 1.0 # Increase for better visibility at larger scale
+        self.MAX_CELL_COUNT = config["cells"]["max_cell_count"]
+        self.CELL_RADIUS = config["cells"]["cell_radius"]
         if self.CELL_RADIUS <= 0.0002: self.CELL_RADIUS_SCALAR = 0.00024/self.CELL_RADIUS
-        self.CELL_REPULSION = 0.005 # how aggressively the cells repulse each other
-        self.INHIBITION_THRESHOLD = 1
-        self.INHIBITION_EXIT_THRESHOLD = 0.2  # Hysteresis for G0 exit
-        self.INHIBITION_FACTOR = 0.05
-        self.REPRODUCTION_OFFSET = 1.5
-        self.SCALPEL_RADIUS = scalpel_size
-        self.MAX_CELL_SPEED = 0.004*self.CELL_RADIUS
-
-        self.GRID_SCALE_FACTOR = 1.5
-        self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
-        self.MAX_PARTICLES_PER_GRID_CELL = 8
-        self.FRICTION = 0.95
-
-        self.MIN_ECM_PERIOD = 20
-        self.MAX_ECM_COUNT = 1000000
-        self.ECM_DETECTION_RADIUS = 20*self.CELL_RADIUS
-        self.ECM_THRESHOLD = 7
-        self.ECM_AVOIDANCE_STRENGTH = 0.000001  # Tweakable strength of ECM avoidance
-
+        self.CELL_REPULSION = config["cells"]["cell_repulsion"]
+        self.REPRODUCTION_OFFSET = config["cells"]["reproduction_offset"]
+        self.MAX_CELL_SPEED = config["cells"]["max_cell_speed"]*self.CELL_RADIUS
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
-        self.CCDPlaceholder = freq
+        self.CCDPlaceholder = config["cells"]["cell_cycle_duration"]
 
-        self.PHASE_COLORS = np.array([0x858585, 0x66ccff, 0xffcc66, 0x66ff66, 0xff6699], dtype=np.uint32)
+        self.INHIBITION_THRESHOLD = config["inhibition"]["inhibition_threshold"]
+        self.INHIBITION_EXIT_THRESHOLD = config["inhibition"]["inhibition_exit_threshold"]
+        self.INHIBITION_FACTOR = config["inhibition"]["inhibition_factor"]
+
+        self.SUBSTEPS = config["environment"]["substeps"]
+        self.GRID_SCALE_FACTOR = config["environment"]["grid_scale_factor"]
+        self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
+        self.MAX_PARTICLES_PER_GRID_CELL = config["environment"]["max_particles_per_grid_cell"]
+        self.FRICTION = config["environment"]["friction"]
+
+        self.MIN_ECM_PERIOD = config["ecm"]["min_ecm_period"]
+        self.MAX_ECM_COUNT = config["ecm"]["max_ecm_count"]
+        self.ECM_DETECTION_RADIUS = config["ecm"]["ecm_detection_radius"]*self.CELL_RADIUS
+        self.ECM_THRESHOLD = config["ecm"]["ecm_threshold"]
+        self.ECM_AVOIDANCE_STRENGTH = config["ecm"]["ecm_avoidance_strength"]  # Tweakable strength of ECM avoidance
+
+        self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
+        self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
 
         self.GENE_POINTS = ti.Vector.field(2, dtype=ti.f32, shape=(11, 2))
-        gene_points = np.array([
-            [[6, 0.3], [28, 1]], # ORC1
-            [[28, 1], [49, 0.3]], # CCNE1
-            [[30, 1], [46, 0.3]], # CCNE2
-            [[4, 0.3], [29, 0.9]], # MCM6
-            [[15, 0.1], [45, 1]], # WEE1
-            [[18, 0.3], [46, 1]], # CDK1
-            [[20, 0.4], [45, 1]], # CCNF
-            [[19, 0.2], [45, 0.9]], # NUSAP1
-            [[22, 0.4], [47, 1]], # AURKA
-            [[18, 0.2], [46, 0.8]], # CCNA2
-            [[4, 0.8], [30, 0.3]] # CCNB2
-        ], dtype=np.float32)
-        self.GENE_POINTS.from_numpy(gene_points)
+        self.GENE_POINTS.from_numpy(np.array(config["genes"]["gene_points"], dtype=np.float32))
+        self.GENE_VARIATION = config["genes"]["gene_variation"]
+        self.GENE_CYCLE_LENGTH = config["genes"]["gene_cycle_length"]
 
-        self.GENE_VARIATION = 0.02
-        self.GENE_CYCLE_LENGTH = 50
+        self.SCALPEL_RADIUS = config["tools"]["scalpel_radius"]
 
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0

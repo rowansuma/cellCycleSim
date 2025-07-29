@@ -1,36 +1,23 @@
 import taichi as ti
-import numpy as np
+import tomli
+import os
+import shutil
 from env import Env
-import time
 import csv
 
 ti.init(arch=ti.gpu)
 
-defaults = [0.002, 150000, 60, 0.05]
+if not os.path.exists("config.toml"):
+    shutil.copyfile("defaultconfig.toml", "config.toml")
+    print(f"Created config.toml from defaultconfig.toml")
+
+with open('config.toml', 'rb') as f:
+    config = tomli.load(f)
+
+
 display_phase = True
-write_csv = True
 
-# Simulation Parameters
-print("\nSimulation Parameters:\n")
-use_defaults = input("Use Defaults? (y/n): ")
-if use_defaults == "y":
-    radius = defaults[0]
-    max_cells = defaults[1]
-    freq = defaults[2]
-    scalpel_size = defaults[3]
-    print(f"Using defaults:\nRadius = {radius}\nMax = {max_cells}\nDuration = {freq}\nScalpel Size = {scalpel_size}")
-elif use_defaults == "n":
-    radius = float(input(f"Cell Radius (default: {defaults[0]}): "))
-    max_cells = int(input(f"Max Cells (default: {defaults[1]}): "))
-    freq = int(input(f"Cell Cycle Duration (default: {defaults[2]}): "))
-    scalpel_size = float(input(f"Scalpel Size (default: {defaults[3]}): "))
-else:
-    print("Invalid; quitting...")
-    quit()
-
-time.sleep(0.5)
-
-env = Env(radius, max_cells, freq, scalpel_size)
+env = Env(config)
 
 gui = ti.GUI("Cell Cycle Sim", res=env.SCREEN_SIZE)
 env.initialize_board()
@@ -110,27 +97,26 @@ while gui.running:
     gui.show()
 
     # Write to CSV
-    if write_csv:
-        with open('data.csv', 'a') as csv_file:
-            csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+    with open('data.csv', 'a') as csv_file:
+        csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
-            info = {
-                "step": env.step[None],
-                "population": env.cellsAlive[None],
-                "ecm": env.ecmCount[None],
-                "gene0": env.geneField[0][0],
-                "gene1": env.geneField[0][1],
-                "gene2": env.geneField[0][2],
-                "gene3": env.geneField[0][3],
-                "gene4": env.geneField[0][4],
-                "gene5": env.geneField[0][5],
-                "gene6": env.geneField[0][6],
-                "gene7": env.geneField[0][7],
-                "gene8": env.geneField[0][8],
-                "gene9": env.geneField[0][9],
-                "gene10": env.geneField[0][10],
-            }
-            csv_writer.writerow(info)
+        info = {
+            "step": env.step[None],
+            "population": env.cellsAlive[None],
+            "ecm": env.ecmCount[None],
+            "gene0": env.geneField[0][0],
+            "gene1": env.geneField[0][1],
+            "gene2": env.geneField[0][2],
+            "gene3": env.geneField[0][3],
+            "gene4": env.geneField[0][4],
+            "gene5": env.geneField[0][5],
+            "gene6": env.geneField[0][6],
+            "gene7": env.geneField[0][7],
+            "gene8": env.geneField[0][8],
+            "gene9": env.geneField[0][9],
+            "gene10": env.geneField[0][10],
+        }
+        csv_writer.writerow(info)
 
 
 
