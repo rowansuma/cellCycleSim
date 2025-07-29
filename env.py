@@ -18,7 +18,7 @@ class Env:
         self.INHIBITION_FACTOR = 0.05
         self.REPRODUCTION_OFFSET = 1.5
         self.SCALPEL_RADIUS = scalpel_size
-        self.MAX_CELL_SPEED = 0.002*self.CELL_RADIUS
+        self.MAX_CELL_SPEED = 0.004*self.CELL_RADIUS
 
         self.GRID_SCALE_FACTOR = 1.5
         self.GRID_RES = int(1 / (self.CELL_RADIUS * 2 * self.GRID_SCALE_FACTOR))
@@ -27,9 +27,9 @@ class Env:
 
         self.MIN_ECM_PERIOD = 20
         self.MAX_ECM_COUNT = 1000000
-        self.ECM_DETECTION_RADIUS = 8*self.CELL_RADIUS
-        self.ECM_THRESHOLD = 10
-        self.ECM_AVOIDANCE_STRENGTH = 0.00001  # Tweakable strength of ECM avoidance
+        self.ECM_DETECTION_RADIUS = 20*self.CELL_RADIUS
+        self.ECM_THRESHOLD = 7
+        self.ECM_AVOIDANCE_STRENGTH = 0.000001  # Tweakable strength of ECM avoidance
 
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = freq
@@ -79,6 +79,8 @@ class Env:
         self.geneField = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.lastECMField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
         self.ecmPeriodField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
+
+        self.repulseField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Current Pos
 
         # Cell Info Buffers
         self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
@@ -227,6 +229,31 @@ class Env:
     @ti.kernel
     def apply_locomotion(self):
         for i in range(self.cellsAlive[None]):
+            repulse_vec = ti.Vector([0.0, 0.0])
+            ecm_count = 0
+            if self.phaseField[i] != 0:
+                gridcell_x = ti.min(ti.max(int(self.posField[i][0] * self.GRID_RES), 0), self.GRID_RES - 1)
+                gridcell_y = ti.min(ti.max(int(self.posField[i][1] * self.GRID_RES), 0), self.GRID_RES - 1)
+                ecm_centroid = ti.Vector([0.0, 0.0])
+                for offset in ti.static(ti.grouped(ti.ndrange((-2, 3), (-2, 3)))):
+                    cx = gridcell_x + offset[0]
+                    cy = gridcell_y + offset[1]
+                    if 0 <= cx < self.GRID_RES and 0 <= cy < self.GRID_RES:
+                        count = self.ecmGridCount[cx, cy]
+                        for j in range(count):
+                            ecm_idx = self.ecmGrid[cx, cy, j]
+                            dx = self.posField[i] - self.ecmPosField[ecm_idx]
+                            dist = dx.norm()
+                            if dist < self.ECM_DETECTION_RADIUS:
+                                ecm_centroid += self.ecmPosField[ecm_idx]
+                                ecm_count += 1
+                if ecm_count > 0:
+                    ecm_avg_pos = ecm_centroid/ecm_count
+                    delta = self.posField[i] - ecm_avg_pos
+                    if ti.math.length(delta) > 0.005:
+                        repulse_vec = ti.math.normalize(delta)*self.ECM_AVOIDANCE_STRENGTH
+            self.repulseField[i] = repulse_vec*5000
+
             if ti.random() < 0.3:
                 r = ti.random()
                 val = 0
@@ -237,11 +264,10 @@ class Env:
                 else:
                     val = 1
                 self.mvmtField[i][1] = val
-
             self.mvmtField[i][0] += self.mvmtField[i][1] * 0.01
             angle = self.mvmtField[i][0] * 2 * ti.math.pi
             mvmtVector = self.mvmtField[i][2] * ti.Vector([ti.cos(angle), ti.sin(angle)])
-            self.posField[i] += mvmtVector
+            self.posField[i] += (mvmtVector+repulse_vec)/(ti.math.log(ecm_count+5)-0.6)
 
     @ti.kernel
     def handle_collisions(self): # Collisions
