@@ -1,0 +1,56 @@
+[environment]
+substeps = 5                            # iterations of collision logic ran per tick
+grid_scale_factor = 1.5                 # gridcell size multiplier, decrease for large gridcells
+max_particles_per_grid_cell = 8         # max particles per gridcell
+friction = 0.95                         # friction multiplier. 1 = no friction, 0 = no movement
+
+[cells]
+max_cell_count = 150000                 # max cell capacity
+cell_radius = 0.002                     # scale of simulation. smaller = larger scale
+cell_cycle_duration = 240               # duration of the cell cycle (in ticks)
+cell_repulsion = 0.005                  # how agressively cells repulse. larger = more aggressive
+reproduction_offset = 1.5               # distance from the parent that the daughter is created
+max_cell_speed = 0.004                  # max cell speed (in cell radii / tick)
+
+[inhibition]
+inhibition_threshold = 1                # arbitrary point at which cells enter g0
+inhibition_exit_threshold = 0.2         # how low inhibition must fall to exit g0
+inhibition_factor = 0.05                # inhibition counter increment
+
+[ecm]
+max_ecm_count = 1000000                 # max ecm capacity
+min_ecm_period = 20                     # shortest allowed time between ecm deposits
+ecm_detection_radius = 20               # distance cells detect ecm (in cell radii)
+ecm_threshold = 7                       # number of ecm at which cells cease ecm deposition
+ecm_avoidance_strength = 0.000001       # magnitude of ecm avoidance vector
+
+[genes]
+gene_points = [                         # list of gene points
+    [[6.0, 0.3], [28.0, 1.0]],          # ORC1
+    [[28.0, 1.0], [49.0, 0.3]],         # CCNE1
+    [[30.0, 1.0], [46.0, 0.3]],         # CCNE2
+    [[4.0, 0.3], [29.0, 0.9]],          # MCM6
+    [[15.0, 0.1], [45.0, 1.0]],         # WEE1
+    [[18.0, 0.3], [46.0, 1.0]],         # CDK1
+    [[20.0, 0.4], [45.0, 1.0]],         # CCNF
+    [[19.0, 0.2], [45.0, 0.9]],         # NUSAP1
+    [[22.0, 0.4], [47.0, 1.0]],         # AURKA
+    [[18.0, 0.2], [46.0, 0.8]],         # CCNA2
+    [[4.0, 0.8], [30.0, 0.3]]           # CCNB2
+]
+gene_variation = 0.02                   # scale of gene expression random noise
+gene_cycle_length = 50                  # length of the x-axis for gene_points
+
+[display]
+cell_radius_scalar = 1.0                # visual size multiplier for visibility at large scales
+display_phase = true                    # display cell cycle phases?
+phase_colors = [                        # color palette for cell phases
+    0x858585,
+    0x66ccff,
+    0xffcc66,
+    0x66ff66,
+    0xff6699
+]
+
+[tools]
+scalpel_radius = 0.05                   # scalpel tool radius

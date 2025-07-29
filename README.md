@@ -27,11 +27,11 @@ Made by Rowan Sumanaweera
 - [x] Tweak Contact Inhibition
 - [x] Add Fibroblast Motility
 - [x] Add Gene Expression
-- [ ] Add ECM Particles and ECM Behavior
-- [ ] Add ECM Plot, Cell Inhibition Time Plot
-- [ ] Add Variable Cell Motion
-- [ ] Add Input Parameters YAML File
+- [x] Add ECM Particles and ECM Behavior
+- [x] Add Variable Cell Motion
+- [x] Add Input Parameters TOML File
 - [ ] Add Output Diagnostic Page & Data Storage
+- [ ] Add ECM Plot, Cell Inhibition Time Plot
 - [ ] Make Cells Elliptical
 - [ ] Make Gene Expression Peaks Variable
 - [ ] Modify Gene Expression to Use Real Data
