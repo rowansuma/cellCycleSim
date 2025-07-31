@@ -30,7 +30,7 @@ class Env:
         self.MAX_ECM_COUNT = config["ecm"]["max_ecm_count"]
         self.ECM_DETECTION_RADIUS = config["ecm"]["ecm_detection_radius"]*self.CELL_RADIUS
         self.ECM_THRESHOLD = config["ecm"]["ecm_threshold"]
-        self.ECM_AVOIDANCE_STRENGTH = config["ecm"]["ecm_avoidance_strength"]  # Tweakable strength of ECM avoidance
+        self.ECM_AVOIDANCE_STRENGTH = config["ecm"]["ecm_avoidance_strength"]
 
         self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
         self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
