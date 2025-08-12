@@ -30,6 +30,7 @@ Made by Rowan Sumanaweera
 - [x] Add ECM Particles and ECM Behavior
 - [x] Add Variable Cell Motion
 - [x] Add Input Parameters TOML File
+- [ ] Add Deletion Shapes
 - [ ] Add Output Diagnostic Page & Data Storage
 - [ ] Add ECM Plot, Cell Inhibition Time Plot
 - [ ] Make Cells Elliptical
@@ -44,6 +45,9 @@ Made by Rowan Sumanaweera
 3. Hold down Left Click to delete cells within a radius
 4. Press Right Click to create a cell
 5. Note that the colors indicate cell cycle stage; (gray=G0, blue=G1, yellow=S, green=G2, red=M)
+
+# Dependencies
+The simulation was designed using python 3.9 and the following python packages: taichi 1.7.3, tomli 2.2.1, numpy 2.0.2, matplotlib 3.9.4, seaborn 0.13.2, and pandas 2.3.0.
 
 ## Other Notes
 
