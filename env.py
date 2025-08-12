@@ -67,8 +67,6 @@ class Env:
         self.lastECMField = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
         self.ecmPeriodField = ti.field(dtype=ti.f32, shape=self.MAX_CELL_COUNT)
 
-        self.repulseField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT) # Current Pos
-
         # Cell Info Buffers
         self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
         self.prevPosFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_CELL_COUNT)
@@ -90,6 +88,9 @@ class Env:
         self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_CELL_COUNT)
         self.toDeleteECM = ti.field(dtype=ti.i32, shape=self.MAX_ECM_COUNT)
         self.bufferCount = ti.field(dtype=ti.i32, shape=())
+
+        # Data Collection
+        self.topoField = ti.field(dtype=ti.f32, shape=(self.GRID_RES, self.GRID_RES))
 
         self.initialize_board()
 
@@ -239,7 +240,6 @@ class Env:
                     delta = self.posField[i] - ecm_avg_pos
                     if ti.math.length(delta) > 0.005:
                         repulse_vec = ti.math.normalize(delta)*self.ECM_AVOIDANCE_STRENGTH
-            self.repulseField[i] = repulse_vec*5000
 
             if ti.random() < 0.3:
                 r = ti.random()
@@ -385,6 +385,19 @@ class Env:
 
             # Update Genes
             self.update_genes(i)
+
+    @ti.kernel
+    def clear_topo_field(self):
+        for i, j in self.topoField:
+            self.topoField[i, j] = 0.0
+
+    @ti.kernel
+    def accumulate_density(self):
+        for i in range(self.cellsAlive[None]):
+            pos = self.posField[i]
+            x = ti.min(ti.max(int(pos[0] * self.GRID_RES), 0), self.GRID_RES - 1)
+            y = ti.min(ti.max(int(pos[1] * self.GRID_RES), 0), self.GRID_RES - 1)
+            ti.atomic_add(self.topoField[x, y], 1.0)
 
     @ti.kernel
     def create_cell(self, posX: ti.f32, posY: ti.f32):

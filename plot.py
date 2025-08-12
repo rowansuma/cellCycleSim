@@ -29,7 +29,7 @@ PHASE_COLORS = ["#858585", "#66ccff", "#ffcc66", "#66ff66"]
 
 
 # --- Create Figure and Subplots ---
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True, constrained_layout=True)
+fig, (ax1) = plt.subplots(1, 1, figsize=(10, 8), sharex=True, constrained_layout=True)
 
 # --- Add Button to Same Figure ---
 # The coordinate system is [left, bottom, width, height] in figure-relative units
@@ -69,7 +69,7 @@ toggle_ecm_button.on_clicked(toggle_ecm)
 # --- Animation Function ---
 def animate(i):
     try:
-        data = pd.read_csv('data.csv')
+        data = pd.read_csv('data/data.csv')
     except Exception:
         return
 
@@ -77,7 +77,7 @@ def animate(i):
 
     # Clear previous plots
     ax1.cla()
-    ax2.cla()
+    # ax2.cla()
 
     # Plot Population & ECM
     for idx, name in enumerate(LINE_NAMES):
@@ -88,23 +88,23 @@ def animate(i):
     ax1.set_title('Cell Population and ECM Count Over Time')
     ax1.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
 
-    # Plot Population & ECM
-    for idx, name in enumerate(PHASE_NAMES):
-        if name in data.columns:
-            sns.lineplot(ax=ax2, x=x, y=data[name], label=PHASE_LABELS[idx], color=PHASE_COLORS[idx])
-
-    ax2.set_xlabel('Simulation Step')
-    ax2.set_ylabel('Percentage of Cells')
-    ax2.set_title('Phase Distribution Over Time')
-    ax2.set_ylim(-1, 101)
-    ax2.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
+    # # Plot Population & ECM
+    # for idx, name in enumerate(PHASE_NAMES):
+    #     if name in data.columns:
+    #         sns.lineplot(ax=ax2, x=x, y=data[name], label=PHASE_LABELS[idx], color=PHASE_COLORS[idx])
+    #
+    # ax2.set_xlabel('Simulation Step')
+    # ax2.set_ylabel('Percentage of Cells')
+    # ax2.set_title('Phase Distribution Over Time')
+    # ax2.set_ylim(-1, 101)
+    # ax2.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
 
     # # Plot Gene Expressions
     # for idx, gene in enumerate(GENE_NAMES):
     #     if gene in data.columns:
     #         sns.lineplot(ax=ax2, x=x, y=data[gene], label=GENE_LABELS[idx], color=GENE_COLORS[idx % len(GENE_COLORS)])
     #
-    # ax2.set_xlabel('Simulation Step')
+    ax1.set_xlabel('Simulation Step')
     # ax2.set_ylabel('Gene Expression Level')
     # ax2.set_title('Gene Expression in First Cell Over Time')
     # ax2.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
