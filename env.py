@@ -112,7 +112,6 @@ class Env:
             self.geneField[index] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
             self.lastECMField[index] = -1
             self.ecmPeriodField[index] = -1
-
         self.posField[0] = [0.5, 0.5] # Init First Cell
         self.prevPosField[0] = self.posField[0]
         self.lastDivField[0] = 0
@@ -447,26 +446,63 @@ class Env:
             self.cellsAlive[None] = self.MAX_CELL_COUNT
 
     @ti.kernel
-    def mark_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, scalpel_radius: ti.f32): # Mark cells for deletion
+    def mark_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32): # 0 = circle, 1 = square, 2 = triangle
         for i in range(self.cellsAlive[None]):
             dx = self.posField[i][0] - mouse_x
             dy = self.posField[i][1] - mouse_y
-            dist = (dx * dx + dy * dy) ** 0.5
-            if dist < scalpel_radius:
-                self.toDelete[i] = 1
-            else:
-                self.toDelete[i] = 0
+            delete = 0
+
+            if shape == 0:  # Circle
+                dist = ti.math.length(ti.Vector([dx, dy]))
+                if dist < size:
+                    delete = 1
+
+            elif shape == 1:  # Square
+                if ti.abs(dx) < size and ti.abs(dy) < size:
+                    delete = 1
+
+            elif shape == 2:  # Upright equilateral triangle
+                height = size*2
+                # shift so triangle base is at -height/2, tip is at +height/2
+                local_y = dy + height / 2
+                if 0 <= local_y <= height:
+                    # proportion from base (0) to tip (height)
+                    t = local_y / height
+                    half_width = (1 - t) * (size)
+                    if ti.abs(dx) <= half_width:
+                        delete = 1
+
+            self.toDelete[i] = delete
+
 
     @ti.kernel
-    def mark_ecm_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, scalpel_radius: ti.f32):
+    def mark_ecm_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
         for i in range(self.ecmCount[None]):
             dx = self.ecmPosField[i][0] - mouse_x
             dy = self.ecmPosField[i][1] - mouse_y
-            dist = (dx * dx + dy * dy) ** 0.5
-            if dist < scalpel_radius:
-                self.toDeleteECM[i] = 1
-            else:
-                self.toDeleteECM[i] = 0
+            delete = 0
+
+            if shape == 0:  # Circle
+                dist = ti.math.length(ti.Vector([dx, dy]))
+                if dist < size:
+                    delete = 1
+
+            elif shape == 1:  # Square
+                if ti.abs(dx) < size and ti.abs(dy) < size:
+                    delete = 1
+
+            elif shape == 2:  # Upright equilateral triangle
+                height = size*2
+                # shift so triangle base is at -height/2, tip is at +height/2
+                local_y = dy + height / 2
+                if 0 <= local_y <= height:
+                    # proportion from base (0) to tip (height)
+                    t = local_y / height
+                    half_width = (1 - t) * (size)
+                    if ti.abs(dx) <= half_width:
+                        delete = 1
+
+            self.toDeleteECM[i] = delete
 
     @ti.kernel
     def write_buffer_cells(self): # Write to-be-swapped cells to buffer

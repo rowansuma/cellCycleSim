@@ -33,13 +33,17 @@ fig, (ax1) = plt.subplots(1, 1, figsize=(10, 8), sharex=True, constrained_layout
 
 # --- Add Button to Same Figure ---
 # The coordinate system is [left, bottom, width, height] in figure-relative units
-ax_toggle_phase = fig.add_axes([0.83, 0.12, 0.15, 0.05])
-ax_toggle_cells = fig.add_axes([0.83, 0.06, 0.15, 0.05])
-ax_toggle_ecm = fig.add_axes([0.83, 0.00, 0.15, 0.05])
+ax_toggle_phase = fig.add_axes([0.83, 0.18, 0.15, 0.05])
+ax_toggle_cells = fig.add_axes([0.83, 0.12, 0.15, 0.05])
+ax_toggle_ecm = fig.add_axes([0.83, 0.06, 0.15, 0.05])
+ax_cycle_scalpel = fig.add_axes([0.83, 0.00, 0.15, 0.05])
+
 
 toggle_phase_button = Button(ax_toggle_phase, 'Toggle Phase')
 toggle_cells_button = Button(ax_toggle_cells, 'Toggle Cells')
 toggle_ecm_button = Button(ax_toggle_ecm, 'Toggle ECM')
+cycle_scalpel_button = Button(ax_cycle_scalpel, 'Cycle Scalpel')
+
 
 
 # --- Socket Command Sender ---
@@ -61,9 +65,14 @@ def toggle_cells(event):
 def toggle_ecm(event):
     send_command("toggle_display_ecm")
 
+def cycle_scalpel(event):
+    send_command("cycle_scalpel")
+
+
 toggle_phase_button.on_clicked(toggle_phase)
 toggle_cells_button.on_clicked(toggle_cells)
 toggle_ecm_button.on_clicked(toggle_ecm)
+cycle_scalpel_button.on_clicked(cycle_scalpel)
 
 
 # --- Animation Function ---
