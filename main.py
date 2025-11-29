@@ -1,3 +1,5 @@
+import random
+
 import taichi as ti
 import tomli
 import os
@@ -28,6 +30,7 @@ def command_server():
     global display_phase
     global display_cells
     global display_ecm
+    global cycle_scalpel
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(('localhost', 65432))  # Choose your port, must match client
     server.listen()
@@ -47,6 +50,10 @@ def command_server():
                 display_cells = not display_cells
             if cmd == "toggle_display_ecm":
                 display_ecm = not display_ecm
+            if cmd == "cycle_scalpel":
+                cycle_scalpel += 1
+                if cycle_scalpel == 3:
+                    cycle_scalpel = 0
             # You can add more commands here
             conn.sendall(b'OK')
 
@@ -66,6 +73,7 @@ with open('config.toml', 'rb') as f:
 display_phase = True
 display_cells = True
 display_ecm = True
+cycle_scalpel = 0
 
 
 env = Env(config)
@@ -140,11 +148,11 @@ with open('data/data.csv', 'a') as csv_file:
 
             # Deletion
             if LMB_down and mouse_pos is not None:
-                env.mark_for_deletion(0.5, 0.5, env.SCALPEL_RADIUS)
+                env.mark_for_deletion(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
                 env.write_buffer_cells()
                 env.copy_back_buffer()
                 if not gui.is_pressed(ti.GUI.SHIFT):
-                    env.mark_ecm_for_deletion(0.5, 0.5, env.SCALPEL_RADIUS)
+                    env.mark_ecm_for_deletion(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
                     env.write_buffer_ecm()
                     env.copy_back_buffer_ecm()
 
