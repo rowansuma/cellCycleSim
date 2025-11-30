@@ -120,19 +120,19 @@ with open('data/sample_pos_data.csv', 'w') as csv_file2:
 with open('data/data.csv', 'a') as csv_file:
     with open('data/sample_pos_data.csv', 'a') as csv_file2:
         while gui.running:
-            env.clear_topo_field()
+            # env.clear_topo_field()
             for _ in range(env.SUBSTEPS):  # Do multiple steps per frame for stability
-                env.verlet_step()
-                env.border_constraints()
-                env.clear_grid()
-                env.insert_into_grid()
-                env.apply_locomotion()
-                env.handle_collisions()
-            env.clear_ecm_grid()
-            env.insert_ecm_into_grid()
-            env.handle_cell_cycle()
-            env.clamp_cell_count()
-            env.accumulate_density()
+                env.verlet_step_kernel()
+                env.border_constraints_kernel()
+                env.cellHandler.clear_grid_kernel()
+                env.cellHandler.insert_into_grid_kernel()
+                env.cellHandler.apply_locomotion()
+                env.handle_collisions_kernel()
+            env.ecmHandler.clear_grid_kernel()
+            env.ecmHandler.insert_into_grid_kernel()
+            env.cellHandler.handle_cell_cycle()
+            env.cellHandler.clamp_count()
+            # env.accumulate_density()
 
             # Mouse Button Handling
             mouse_pos = gui.get_cursor_pos()
@@ -144,11 +144,11 @@ with open('data/data.csv', 'a') as csv_file:
                     elif e.type == ti.GUI.RELEASE:
                         LMB_down = False
                 if e.key == ti.GUI.RMB and e.type == ti.GUI.PRESS:
-                    env.create_cell(mouse_pos[0], mouse_pos[1])
+                    env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
 
             # Deletion
             if LMB_down and mouse_pos is not None:
-                env.mark_for_deletion(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
+                env.mark_cells_for_deletion(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
                 env.write_buffer_cells()
                 env.copy_back_buffer()
                 if not gui.is_pressed(ti.GUI.SHIFT):
@@ -158,14 +158,14 @@ with open('data/data.csv', 'a') as csv_file:
 
             if display_ecm:
                 gui.circles(
-                    env.ecmPosField.to_numpy()[:env.ecmCount[None]],
+                    env.ecmHandler.posField.to_numpy()[:env.ecmHandler.count[None]],
                     radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
                     color=0x252345
                 )
-            phases = env.phaseField.to_numpy()[:env.cellsAlive[None]]
+            phases = env.cellHandler.phaseField.to_numpy()[:env.cellHandler.count[None]]
             if display_cells:
+                positions = env.cellHandler.posField.to_numpy()[:env.cellHandler.count[None]]
                 if display_phase:
-                    positions = env.posField.to_numpy()[:env.cellsAlive[None]]
                     colors = env.PHASE_COLORS[phases]
 
                     gui.circles(
@@ -174,7 +174,7 @@ with open('data/data.csv', 'a') as csv_file:
                         color=colors
                     )
                 else:
-                    gui.circles(env.posField.to_numpy(), radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0xffffff)
+                    gui.circles(positions, radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0xffffff)
 
             # gui.arrows(
             #     orig=env.posField.to_numpy()[:env.cellsAlive[None]], direction=env.repulseField.to_numpy()[:env.cellsAlive[None]],
@@ -188,38 +188,38 @@ with open('data/data.csv', 'a') as csv_file:
 
             info = {
                 "step": env.step[None],
-                "population": env.cellsAlive[None],
-                "ecm": env.ecmCount[None],
-                "g0": np.count_nonzero(phases == 0)*100/env.cellsAlive[None],
-                "g1": np.count_nonzero(phases == 1)*100/env.cellsAlive[None],
-                "s": np.count_nonzero(phases == 2)*100/env.cellsAlive[None],
-                "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.cellsAlive[None],
-                "gene0": env.geneField[0][0],
-                "gene1": env.geneField[0][1],
-                "gene2": env.geneField[0][2],
-                "gene3": env.geneField[0][3],
-                "gene4": env.geneField[0][4],
-                "gene5": env.geneField[0][5],
-                "gene6": env.geneField[0][6],
-                "gene7": env.geneField[0][7],
-                "gene8": env.geneField[0][8],
-                "gene9": env.geneField[0][9],
-                "gene10": env.geneField[0][10],
+                "population": env.cellHandler.count[None],
+                "ecm": env.ecmHandler.count[None],
+                "g0": np.count_nonzero(phases == 0)*100/env.cellHandler.count[None],
+                "g1": np.count_nonzero(phases == 1)*100/env.cellHandler.count[None],
+                "s": np.count_nonzero(phases == 2)*100/env.cellHandler.count[None],
+                "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.cellHandler.count[None],
+                "gene0": env.cellHandler.geneField[0][0],
+                "gene1": env.cellHandler.geneField[0][1],
+                "gene2": env.cellHandler.geneField[0][2],
+                "gene3": env.cellHandler.geneField[0][3],
+                "gene4": env.cellHandler.geneField[0][4],
+                "gene5": env.cellHandler.geneField[0][5],
+                "gene6": env.cellHandler.geneField[0][6],
+                "gene7": env.cellHandler.geneField[0][7],
+                "gene8": env.cellHandler.geneField[0][8],
+                "gene9": env.cellHandler.geneField[0][9],
+                "gene10": env.cellHandler.geneField[0][10],
             }
             csv_writer.writerow(info)
 
             csv_writer2 = csv.DictWriter(csv_file2, fieldnames=pos_fieldnames)
 
             info2 = {}
-            pos_list = env.posField.to_numpy()[:env.cellsAlive[None]]
+            pos_list = env.cellHandler.posField.to_numpy()[:env.cellHandler.count[None]]
             i = 0
             for key in pos_fieldnames:
                 info2[key] = pos_list[i // 2][i % 2] if i < len(pos_list) * 2 else None
                 i += 1
             csv_writer2.writerow(info2)
 
-            if env.step[None] % SAMPLE_INTERVAL == 0 and env.cellsAlive[None] > 0:
-                positions = env.posField.to_numpy()[:env.cellsAlive[None]]
+            if env.step[None] % SAMPLE_INTERVAL == 0 and env.cellHandler.count[None] > 0:
+                positions = env.cellHandler.posField.to_numpy()[:env.cellHandler.count[None]]
                 # cycle_stages = env.phaseField.to_numpy()[:env.cellsAlive[None]]
                 idx = 0
                 for pos in positions:
@@ -238,10 +238,10 @@ with open('data/data.csv', 'a') as csv_file:
 
 
             warn = ""
-            if env.cellsAlive[None] == env.MAX_CELL_COUNT:
+            if env.cellHandler.count[None] == env.MAX_CELL_COUNT:
                 warn = " | Warning: Max Cell Count Reached!"
             if env.step[None] % 10 == 0:
-                print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.cellsAlive[None]) + warn)
+                print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.cellHandler.count[None]) + warn)
 
             hour += 24/env.CELL_CYCLE_DURATION[None]
 
