@@ -1,0 +1,318 @@
+import taichi as ti
+
+@ti.data_oriented
+class CellHandler:
+    def __init__(self, env):
+        self.env = env
+        
+        self.MAX_COUNT = env.MAX_CELL_COUNT
+
+        # Fields
+        self.posField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_COUNT) # Current Pos
+        self.prevPosField = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_COUNT) # Previous Pos
+        self.lastDivField = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.inhibitionField = ti.field(dtype=ti.f32, shape=self.MAX_COUNT)
+        self.phaseField = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.mvmtField = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_COUNT)
+        self.cycleDurField = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)  # Cycle duration
+        self.geneField = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_COUNT)
+        self.lastECMField = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.ecmPeriodField = ti.field(dtype=ti.f32, shape=self.MAX_COUNT)
+
+        # Buffer Fields
+        self.posFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_COUNT)
+        self.prevPosFieldBuffer = ti.Vector.field(2, dtype=ti.f32, shape=self.MAX_COUNT)
+        self.lastDivFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.inhibitionFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_COUNT)
+        self.phaseFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.mvmtFieldBuffer = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_COUNT)
+        self.cycleDurFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.geneFieldBuffer = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_COUNT)
+        self.lastECMFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.ecmPeriodFieldBuffer = ti.field(dtype=ti.f32, shape=self.MAX_COUNT)
+
+        # Grid
+        self.grid = ti.field(dtype=ti.i32, shape=(self.env.GRID_RES, self.env.GRID_RES, self.env.MAX_PARTICLES_PER_GRID_CELL))
+        self.gridCount = ti.field(dtype=ti.i32, shape=(self.env.GRID_RES, self.env.GRID_RES))  # how many particles per cell
+
+        self.toDelete = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
+        self.bufferCount = ti.field(dtype=ti.i32, shape=())
+
+        self.count = ti.field(dtype=ti.i32, shape=()) # 1
+        
+
+    @ti.func
+    def calc_starting_genes(self, idx: ti.i32):
+        for gene_idx in range(11):
+            firstPoint = self.env.GENE_POINTS[gene_idx, 0]
+            lastPoint = self.env.GENE_POINTS[gene_idx, 1]
+            beforePoint = (lastPoint[0]-self.env.GENE_CYCLE_LENGTH, lastPoint[1])
+            m = (firstPoint[1]-beforePoint[1]) / (firstPoint[0]-beforePoint[0])
+            b = firstPoint[1] - m * firstPoint[0]
+            self.geneField[idx][gene_idx] = b
+        ti.static_print(self.geneField[idx])
+
+    @ti.func
+    def update_genes(self, idx: ti.i32):
+        cycleTime = (self.env.step[None] - self.lastDivField[idx]) / self.env.CELL_CYCLE_DURATION[None]
+        for gene_idx in range(11):
+            # Find last and next points
+            last_x = -float('inf')
+            next_x = float('inf')
+            last_point = ti.Vector([0.0, 0.0])
+            next_point = ti.Vector([0.0, 0.0])
+            max_x = -float('inf')
+            min_x = float('inf')
+            max_point = ti.Vector([0.0, 0.0])
+            min_point = ti.Vector([0.0, 0.0])
+
+            # Normalize points
+            for point_idx in range(2):
+                point = self.env.GENE_POINTS[gene_idx, point_idx]
+                x = point[0] / 50
+                y = point[1]
+                if cycleTime >= x > last_x:
+                    last_x = x
+                    last_point = ti.Vector([x, y])
+                if cycleTime <= x < next_x:
+                    next_x = x
+                    next_point = ti.Vector([x, y])
+                if x > max_x:
+                    max_x = x
+                    max_point = ti.Vector([x, y])
+                if x < min_x:
+                    min_x = x
+                    min_point = ti.Vector([x, y])
+
+            # Edge cases
+            if last_x == -float('inf'):
+                last_point = ti.Vector([max_x - 1.0, max_point[1]])
+            if next_x == float('inf'):
+                next_point = ti.Vector([min_x + 1.0, min_point[1]])
+
+            x0 = last_point[0]
+            y0 = last_point[1]
+            x1 = next_point[0]
+            y1 = next_point[1]
+
+            if x1 != x0 and x0 <= cycleTime <= x1:
+                increment = (y1 - y0) / (x1 - x0) / self.env.CELL_CYCLE_DURATION[None]
+                # Add small random variation
+                noise = (ti.random() - 0.5) * self.env.GENE_VARIATION
+                self.geneField[idx][gene_idx] += increment + noise
+                if (y0 < y1 < self.geneField[idx][gene_idx]) or (y0 > y1 > self.geneField[idx][gene_idx]):
+                    self.geneField[idx][gene_idx] = y1
+            elif cycleTime < x0:
+                self.geneField[idx][gene_idx] = y0
+            elif cycleTime > x1:
+                self.geneField[idx][gene_idx] = y1
+
+    @ti.kernel
+    def apply_locomotion(self):
+        for i in range(self.count[None]):
+            repulse_vec = ti.Vector([0.0, 0.0])
+            ecm_count = 0
+            if self.phaseField[i] != 0:
+                gridcell_x = ti.min(ti.max(int(self.posField[i][0] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
+                gridcell_y = ti.min(ti.max(int(self.posField[i][1] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
+                ecm_centroid = ti.Vector([0.0, 0.0])
+                for offset in ti.static(ti.grouped(ti.ndrange((-2, 3), (-2, 3)))):
+                    cx = gridcell_x + offset[0]
+                    cy = gridcell_y + offset[1]
+                    if 0 <= cx < self.env.GRID_RES and 0 <= cy < self.env.GRID_RES:
+                        count = self.env.ecmHandler.gridCount[cx, cy]
+                        for j in range(count):
+                            ecm_idx = self.env.ecmHandler.grid[cx, cy, j]
+                            dx = self.posField[i] - self.env.ecmHandler.posField[ecm_idx]
+                            dist = dx.norm()
+                            if dist < self.env.ECM_DETECTION_RADIUS:
+                                ecm_centroid += self.env.ecmHandler.posField[ecm_idx]
+                                ecm_count += 1
+                if ecm_count > 0:
+                    ecm_avg_pos = ecm_centroid/ecm_count
+                    delta = self.posField[i] - ecm_avg_pos
+                    if ti.math.length(delta) > 0.005:
+                        repulse_vec = ti.math.normalize(delta)*self.env.ECM_AVOIDANCE_STRENGTH
+
+            if ti.random() < 0.3:
+                r = ti.random()
+                val = 0
+                if r < 1/3:
+                    val = -1
+                elif r < 2/3:
+                    val = 0
+                else:
+                    val = 1
+                self.mvmtField[i][1] = val
+            self.mvmtField[i][0] += self.mvmtField[i][1] * 0.01
+            angle = self.mvmtField[i][0] * 2 * ti.math.pi
+            mvmtVector = self.mvmtField[i][2] * ti.Vector([ti.cos(angle), ti.sin(angle)])
+            self.posField[i] += (mvmtVector+repulse_vec)/(ti.math.log(ecm_count+5)-0.6)
+
+    @ti.kernel
+    def handle_cell_cycle(self):
+        # Use per-cell cycle duration
+        for i in range(self.count[None]):
+            cycle_length = self.cycleDurField[i]
+            g1_end = max(1, int(0.4 * cycle_length))
+            s_end = max(g1_end + 1, g1_end + max(1, int(0.33 * cycle_length)))
+            g2_end = max(s_end + 1, s_end + max(1, int(0.17 * cycle_length)))
+            if g2_end > cycle_length:
+                g2_end = cycle_length
+            early_g1_end = max(2, g1_end // 20)
+
+            # Phase Switching
+            cycleTime = self.env.step[None] - self.lastDivField[i]
+            prev_phase = self.phaseField[i]
+            if prev_phase == 0:  # If in G0, stay in G0 until contact inhibition is relieved
+                if self.inhibitionField[i] < self.env.INHIBITION_EXIT_THRESHOLD:
+                    # Leaving G0, reset cycle and enter G1
+                    self.phaseField[i] = 1
+                    self.lastDivField[i] = self.env.step[None]
+                    cycleTime = 0
+                else:
+                    self.phaseField[i] = 0  # Stay in G0
+            else:
+                # Only allow entry to G0 during early G1
+                if cycleTime < early_g1_end and self.inhibitionField[i] >= self.env.INHIBITION_THRESHOLD:
+                    self.phaseField[i] = 0  # Enter G0
+                elif cycleTime < g1_end:
+                    self.phaseField[i] = 1  # G1
+                elif cycleTime < s_end:
+                    self.phaseField[i] = 2  # S
+                elif cycleTime < g2_end:
+                    self.phaseField[i] = 3  # G2
+                else:
+                    self.phaseField[i] = 4  # M
+
+            # Cell Movement
+            if self.phaseField[i] == 3 or self.phaseField[i] == 0:
+                self.mvmtField[i][2] -= self.env.MAX_CELL_SPEED/40
+                if self.mvmtField[i][2] < 0:
+                    self.mvmtField[i][2] = 0
+
+            if self.phaseField[i] == 1:
+                self.mvmtField[i][2] += self.env.MAX_CELL_SPEED/10
+                if self.mvmtField[i][2] > self.env.MAX_CELL_SPEED:
+                    self.mvmtField[i][2] = self.env.MAX_CELL_SPEED
+
+            # ECM PERIOD CALCULATIONS
+            ecm_nearby_count = 0
+            pos_i = self.posField[i]
+            gridcell_x = ti.min(ti.max(int(pos_i[0] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
+            gridcell_y = ti.min(ti.max(int(pos_i[1] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
+            for offset in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+                cx = gridcell_x + offset[0]
+                cy = gridcell_y + offset[1]
+                if 0 <= cx < self.env.GRID_RES and 0 <= cy < self.env.GRID_RES:
+                    count = self.env.ecmHandler.gridCount[cx, cy]
+                    for j in range(count):
+                        ecm_idx = self.env.ecmHandler.grid[cx, cy, j]
+                        dx = pos_i - self.env.ecmHandler.posField[ecm_idx]
+                        dist = dx.norm()
+                        if dist < self.env.ECM_DETECTION_RADIUS:
+                            ecm_nearby_count += 1
+            self.ecmPeriodField[i] = self.env.MIN_ECM_PERIOD+ecm_nearby_count
+            if ecm_nearby_count > self.env.ECM_THRESHOLD:
+                self.ecmPeriodField[i] = 99999999
+
+            # ECM Deposition
+            ecmTime = self.env.step[None] - self.lastECMField[i]
+            if ecmTime >= self.ecmPeriodField[i]:
+                success = self.env.ecmHandler.create(self.posField[i][0], self.posField[i][1])
+                if success:
+                    self.lastECMField[i] = self.env.step[None]
+
+            # Cell Division
+            if self.phaseField[i] == 4 and cycleTime >= cycle_length:
+                offset_range = self.env.REPRODUCTION_OFFSET * self.env.CELL_RADIUS
+                offset = ti.Vector([
+                    ti.random() * offset_range - offset_range * 0.5,
+                    ti.random() * offset_range - offset_range * 0.5])
+                new_pos = self.posField[i] + offset
+                success = self.create(new_pos[0], new_pos[1])
+                if success:
+                    self.lastDivField[i] = self.env.step[None]
+
+            # Update Genes
+            self.update_genes(i)
+
+    @ti.func
+    def create(self, posX: ti.f32, posY: ti.f32):
+        success = False
+        current = ti.atomic_add(self.count[None], 0)
+        if current + 1 < self.MAX_COUNT:  # Safe Addition
+            new_idx = ti.atomic_add(self.count[None], 1)
+            if new_idx < self.MAX_COUNT:
+                new_pos = [posX, posY]
+                self.initialize(new_idx, new_pos)
+                success = True
+        return success
+
+    @ti.kernel
+    def clamp_count(self):
+        if self.count[None] > self.MAX_COUNT:
+            self.count[None] = self.MAX_COUNT
+
+    @ti.func
+    def clear_fields(self):
+        self.count[None] = 0
+        for index in range(self.MAX_COUNT):
+            self.posField[index] = [-1, -1]
+            self.prevPosField[index] = self.posField[index]
+            self.lastDivField[index] = -1
+            self.inhibitionField[index] = -1
+            self.phaseField[index] = -1
+            self.mvmtField[index] = [-1, -1, -1]
+            self.cycleDurField[index] = -1
+            self.geneField[index] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+            self.lastECMField[index] = -1
+            self.ecmPeriodField[index] = -1
+
+    @ti.func
+    def initialize(self, idx: ti.i32, pos: ti.template()):
+        self.posField[idx] = pos
+        self.prevPosField[idx] = pos
+        self.lastDivField[idx] = self.env.step[None]
+        self.inhibitionField[idx] = 0
+        self.phaseField[idx] = 1
+        self.mvmtField[idx] = [ti.random(), 0, self.env.MAX_CELL_SPEED]
+        self.cycleDurField[idx] = self.env.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
+        self.lastECMField[idx] = self.env.step[None]
+        self.ecmPeriodField[idx] = 0
+        self.calc_starting_genes(idx)
+
+    @ti.func
+    def write_buffer_index(self, buffer_i, i):
+        self.posFieldBuffer[buffer_i] = self.posField[i]
+        self.prevPosFieldBuffer[buffer_i] = self.prevPosField[i]
+        self.lastDivFieldBuffer[buffer_i] = self.lastDivField[i]
+        self.inhibitionFieldBuffer[buffer_i] = self.inhibitionField[i]
+        self.phaseFieldBuffer[buffer_i] = self.phaseField[i]
+        self.mvmtFieldBuffer[buffer_i] = self.mvmtField[i]
+        self.cycleDurFieldBuffer[buffer_i] = self.cycleDurField[i]
+        self.geneFieldBuffer[buffer_i] = self.geneField[i]
+        self.lastECMFieldBuffer[buffer_i] = self.lastECMField[i]
+        self.ecmPeriodFieldBuffer[buffer_i] = self.ecmPeriodField[i]
+
+    @ti.func
+    def copy_back_buffer_index(self, i):
+        self.posField[i] = self.posFieldBuffer[i]
+        self.prevPosField[i] = self.prevPosFieldBuffer[i]
+        self.lastDivField[i] = self.lastDivFieldBuffer[i]
+        self.inhibitionField[i] = self.inhibitionFieldBuffer[i]
+        self.phaseField[i] = self.phaseFieldBuffer[i]
+        self.mvmtField[i] = self.mvmtFieldBuffer[i]
+        self.cycleDurField[i] = self.cycleDurFieldBuffer[i]
+        self.geneField[i] = self.geneFieldBuffer[i]
+        self.lastECMField[i] = self.lastECMFieldBuffer[i]
+        self.ecmPeriodField[i] = self.ecmPeriodFieldBuffer[i]
+
+    @ti.kernel
+    def clear_grid_kernel(self): # Clear the grid
+        for i in ti.grouped(self.gridCount):
+            self.gridCount[i] = 0
+
+    @ti.kernel
+    def insert_into_grid_kernel(self): # Place the cell into the correct gridcell
+        self.env.particleHandler.insert_into_grid(self)
