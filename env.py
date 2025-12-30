@@ -1,9 +1,10 @@
 import taichi as ti
 import numpy as np
 
-from ecm import ECMHandler
-from particle import ParticleHandler
-from cell import CellHandler
+from particle.ecm import ECMHandler
+from particle.cell import CellHandler
+from particle.fibroblast import FibroblastHandler
+
 
 @ti.data_oriented
 class Env:
@@ -20,6 +21,7 @@ class Env:
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = config["cells"]["cell_cycle_duration"]
 
+        self.INHIBITION_RADIUS = config["inhibition"]["inhibition_radius"]
         self.INHIBITION_THRESHOLD = config["inhibition"]["inhibition_threshold"]
         self.INHIBITION_EXIT_THRESHOLD = config["inhibition"]["inhibition_exit_threshold"]
         self.INHIBITION_FACTOR = config["inhibition"]["inhibition_factor"]
@@ -46,15 +48,18 @@ class Env:
 
         self.SCALPEL_RADIUS = config["tools"]["scalpel_radius"]
 
+        self.EPSILON = 1e-5
+
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
 
         # Data Collection
         self.topoField = ti.field(dtype=ti.f32, shape=(self.GRID_RES, self.GRID_RES))
 
+        self.paused = False
+
         # Handlers
-        self.particleHandler = ParticleHandler(self)
-        self.cellHandler = CellHandler(self)
+        self.fibroHandler = FibroblastHandler(self)
         self.ecmHandler = ECMHandler(self)
 
         self.initialize_board()
@@ -64,30 +69,45 @@ class Env:
         self.CELL_CYCLE_DURATION[None] = self.CCDPlaceholder
         self.step[None] = 0
 
-        self.cellHandler.clear_fields()
+        self.fibroHandler.clear_fields()
         self.ecmHandler.clear_fields()
 
-        self.cellHandler.create(0.5, 0.5)
+        # self.fibroHandler.create(0.5, 0.5)
+        for _ in range(5000):
+         self.fibroHandler.create(ti.random(), ti.random())
 
     @ti.kernel
-    def verlet_step_kernel(self):
-        self.particleHandler.verlet_step(self.cellHandler)
+    def verlet_step_cells_kernel(self):
+        self.fibroHandler.verlet_step()
 
     @ti.kernel
-    def border_constraints_kernel(self): # Stop cells from exiting view
-        self.particleHandler.border_constraints(self.cellHandler)
+    def border_constraints_cell_kernel(self):
+        self.fibroHandler.border_constraints()
 
     @ti.kernel
-    def handle_collisions_kernel(self): # Collisions
-        self.particleHandler.handle_collisions(self.cellHandler)
+    def rebuild_grid_cells_kernel(self):
+        self.fibroHandler.rebuild_grid()
 
     @ti.kernel
-    def mark_cells_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
-        self.particleHandler.mark_for_deletion(self.cellHandler, mouse_x, mouse_y, size, shape)
+    def handle_collisions_cells_kernel(self): # Collisions
+        self.fibroHandler.handle_collisions()
 
     @ti.kernel
-    def mark_ecm_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
-        self.particleHandler.mark_for_deletion(self.ecmHandler, mouse_x, mouse_y, size, shape)
+    def update_kernel(self): # Collisions
+        self.fibroHandler.update()
+        self.ecmHandler.update()
+
+    @ti.kernel
+    def rebuild_grid_ecm_kernel(self):
+        self.ecmHandler.rebuild_grid()
+
+    @ti.kernel
+    def mark_cells_for_deletion_kernel(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
+        self.fibroHandler.mark_for_deletion(mouse_x, mouse_y, size, shape)
+
+    @ti.kernel
+    def mark_ecm_for_deletion_kernel(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
+        self.ecmHandler.mark_for_deletion(mouse_x, mouse_y, size, shape)
 
     # @ti.kernel
     # def clear_topo_field(self):
@@ -96,31 +116,31 @@ class Env:
     #
     # @ti.kernel
     # def accumulate_density(self):
-    #     for i in range(self.cellHandler.count[None]):
-    #         pos = self.cellHandler.posField[i]
+    #     for i in range(self.fibroHandler.count[None]):
+    #         pos = self.fibroHandler.posField[i]
     #         x = ti.min(ti.max(int(pos[0] * self.GRID_RES), 0), self.GRID_RES - 1)
     #         y = ti.min(ti.max(int(pos[1] * self.GRID_RES), 0), self.GRID_RES - 1)
     #         ti.atomic_add(self.topoField[x, y], 1.0)
 
     @ti.kernel
-    def write_buffer_cells(self): # Write to-be-swapped cells to buffer
-        self.particleHandler.write_buffer(self.cellHandler)
+    def write_buffer_cells_kernel(self): # Write to-be-swapped cells to buffer
+        self.fibroHandler.write_buffer()
 
     @ti.kernel
-    def write_buffer_ecm(self):
-        self.particleHandler.write_buffer(self.ecmHandler)
+    def write_buffer_ecm_kernel(self):
+        self.ecmHandler.write_buffer()
 
     @ti.kernel
-    def copy_back_buffer(self): # Write the buffer cells back to main fields
-        self.particleHandler.copy_back_buffer(self.cellHandler)
+    def copy_back_buffer_cells_kernel(self): # Write the buffer cells back to main fields
+        self.fibroHandler.copy_back_buffer()
 
     @ti.kernel
-    def copy_back_buffer_ecm(self):
-        self.particleHandler.copy_back_buffer(self.ecmHandler)
+    def copy_back_buffer_ecm_kernel(self):
+        self.ecmHandler.copy_back_buffer()
 
     @ti.kernel
     def create_cell_kernel(self, posX: ti.f32, posY: ti.f32):
-        self.cellHandler.create(posX, posY)
+        self.fibroHandler.create(posX, posY)
 
     @ti.kernel
     def create_ecm_kernel(self, posX: ti.f32, posY: ti.f32):

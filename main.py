@@ -80,7 +80,6 @@ env = Env(config)
 threading.Thread(target=command_server, daemon=True).start()
 
 gui = ti.GUI("Cell Cycle Sim", res=env.SCREEN_SIZE)
-env.initialize_board()
 
 # Constants
 SAMPLE_INTERVAL = 500
@@ -120,20 +119,6 @@ with open('data/sample_pos_data.csv', 'w') as csv_file2:
 with open('data/data.csv', 'a') as csv_file:
     with open('data/sample_pos_data.csv', 'a') as csv_file2:
         while gui.running:
-            # env.clear_topo_field()
-            for _ in range(env.SUBSTEPS):  # Do multiple steps per frame for stability
-                env.verlet_step_kernel()
-                env.border_constraints_kernel()
-                env.cellHandler.clear_grid_kernel()
-                env.cellHandler.insert_into_grid_kernel()
-                env.cellHandler.apply_locomotion()
-                env.handle_collisions_kernel()
-            env.ecmHandler.clear_grid_kernel()
-            env.ecmHandler.insert_into_grid_kernel()
-            env.cellHandler.handle_cell_cycle()
-            env.cellHandler.clamp_count()
-            # env.accumulate_density()
-
             # Mouse Button Handling
             mouse_pos = gui.get_cursor_pos()
 
@@ -145,16 +130,20 @@ with open('data/data.csv', 'a') as csv_file:
                         LMB_down = False
                 if e.key == ti.GUI.RMB and e.type == ti.GUI.PRESS:
                     env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
+                if e.key == ti.GUI.SPACE and e.type == ti.GUI.PRESS:
+                    env.paused = not env.paused
 
             # Deletion
-            if LMB_down and mouse_pos is not None:
-                env.mark_cells_for_deletion(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
-                env.write_buffer_cells()
-                env.copy_back_buffer()
+            if env.paused and LMB_down and mouse_pos is not None:
+                env.mark_cells_for_deletion_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
+                env.write_buffer_cells_kernel()
+                env.copy_back_buffer_cells_kernel()
+                env.rebuild_grid_cells_kernel()
                 if not gui.is_pressed(ti.GUI.SHIFT):
-                    env.mark_ecm_for_deletion(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
-                    env.write_buffer_ecm()
-                    env.copy_back_buffer_ecm()
+                    env.mark_ecm_for_deletion_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
+                    env.write_buffer_ecm_kernel()
+                    env.copy_back_buffer_ecm_kernel()
+                    env.rebuild_grid_ecm_kernel()
 
             if display_ecm:
                 gui.circles(
@@ -162,9 +151,9 @@ with open('data/data.csv', 'a') as csv_file:
                     radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
                     color=0x252345
                 )
-            phases = env.cellHandler.phaseField.to_numpy()[:env.cellHandler.count[None]]
+            phases = env.fibroHandler.phaseField.to_numpy()[:env.fibroHandler.count[None]]
             if display_cells:
-                positions = env.cellHandler.posField.to_numpy()[:env.cellHandler.count[None]]
+                positions = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
                 if display_phase:
                     colors = env.PHASE_COLORS[phases]
 
@@ -183,43 +172,57 @@ with open('data/data.csv', 'a') as csv_file:
             # )
             gui.show()
 
+            if env.paused:
+                continue
+
+            # env.clear_topo_field()
+            for _ in range(env.SUBSTEPS):  # Do multiple steps per frame for stability
+                env.verlet_step_cells_kernel()
+                env.border_constraints_cell_kernel()
+                env.rebuild_grid_cells_kernel()
+                env.handle_collisions_cells_kernel()
+
+            env.update_kernel()
+
+            env.rebuild_grid_ecm_kernel()
+            # env.accumulate_density()
 
             csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
             info = {
                 "step": env.step[None],
-                "population": env.cellHandler.count[None],
+                "population": env.fibroHandler.count[None],
                 "ecm": env.ecmHandler.count[None],
-                "g0": np.count_nonzero(phases == 0)*100/env.cellHandler.count[None],
-                "g1": np.count_nonzero(phases == 1)*100/env.cellHandler.count[None],
-                "s": np.count_nonzero(phases == 2)*100/env.cellHandler.count[None],
-                "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.cellHandler.count[None],
-                "gene0": env.cellHandler.geneField[0][0],
-                "gene1": env.cellHandler.geneField[0][1],
-                "gene2": env.cellHandler.geneField[0][2],
-                "gene3": env.cellHandler.geneField[0][3],
-                "gene4": env.cellHandler.geneField[0][4],
-                "gene5": env.cellHandler.geneField[0][5],
-                "gene6": env.cellHandler.geneField[0][6],
-                "gene7": env.cellHandler.geneField[0][7],
-                "gene8": env.cellHandler.geneField[0][8],
-                "gene9": env.cellHandler.geneField[0][9],
-                "gene10": env.cellHandler.geneField[0][10],
+                "g0": np.count_nonzero(phases == 0)*100/env.fibroHandler.count[None],
+                "g1": np.count_nonzero(phases == 1)*100/env.fibroHandler.count[None],
+                "s": np.count_nonzero(phases == 2)*100/env.fibroHandler.count[None],
+                "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.fibroHandler.count[None],
+                "gene0": env.fibroHandler.geneField[0][0],
+                "gene1": env.fibroHandler.geneField[0][1],
+                "gene2": env.fibroHandler.geneField[0][2],
+                "gene3": env.fibroHandler.geneField[0][3],
+                "gene4": env.fibroHandler.geneField[0][4],
+                "gene5": env.fibroHandler.geneField[0][5],
+                "gene6": env.fibroHandler.geneField[0][6],
+                "gene7": env.fibroHandler.geneField[0][7],
+                "gene8": env.fibroHandler.geneField[0][8],
+                "gene9": env.fibroHandler.geneField[0][9],
+                "gene10": env.fibroHandler.geneField[0][10],
             }
             csv_writer.writerow(info)
 
             csv_writer2 = csv.DictWriter(csv_file2, fieldnames=pos_fieldnames)
 
             info2 = {}
-            pos_list = env.cellHandler.posField.to_numpy()[:env.cellHandler.count[None]]
+            pos_list = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
             i = 0
             for key in pos_fieldnames:
                 info2[key] = pos_list[i // 2][i % 2] if i < len(pos_list) * 2 else None
                 i += 1
             csv_writer2.writerow(info2)
 
-            if env.step[None] % SAMPLE_INTERVAL == 0 and env.cellHandler.count[None] > 0:
-                positions = env.cellHandler.posField.to_numpy()[:env.cellHandler.count[None]]
+            if env.step[None] % SAMPLE_INTERVAL == 0 and env.fibroHandler.count[None] > 0:
+                positions = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
                 # cycle_stages = env.phaseField.to_numpy()[:env.cellsAlive[None]]
                 idx = 0
                 for pos in positions:
@@ -238,10 +241,10 @@ with open('data/data.csv', 'a') as csv_file:
 
 
             warn = ""
-            if env.cellHandler.count[None] == env.MAX_CELL_COUNT:
+            if env.fibroHandler.count[None] == env.MAX_CELL_COUNT:
                 warn = " | Warning: Max Cell Count Reached!"
             if env.step[None] % 10 == 0:
-                print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.cellHandler.count[None]) + warn)
+                print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.fibroHandler.count[None]) + warn)
 
             hour += 24/env.CELL_CYCLE_DURATION[None]
 
