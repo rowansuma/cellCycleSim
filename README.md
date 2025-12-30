@@ -30,19 +30,19 @@ Made by Rowan Sumanaweera
 - [x] Add ECM Particles and ECM Behavior
 - [x] Add Variable Cell Motion
 - [x] Add Input Parameters TOML File
-- [ ] Add Deletion Shapes
-- [ ] Add Output Diagnostic Page & Data Storage
-- [ ] Add ECM Plot, Cell Inhibition Time Plot
-- [ ] Make Cells Elliptical
-- [ ] Make Gene Expression Peaks Variable
-- [ ] Modify Gene Expression to Use Real Data
-- [ ] Make Gene Expression Determine Cell Cycle
+- [x] Add Deletion Shapes
+- [ ] Create Batch Experiment Mode
+- [ ] Create Image Frame Capturer
+- [ ] Design Experimental Data Collection Methods
+- [ ] Add CAD Deletion Shape compatibility
+- [ ] Create In/Out HTML Page
+
 
 ## Usage
 
-1. Run plot.py and plot2.py to create MatPlotLib window for real-time graphing
+1. Edit config.toml to suit your experimental needs
 2. Run main.py to open the simulation, input simulation parameters.
-3. Hold down Left Click to delete cells within a radius
+3. Press Space to pause. When paused, hold Left Click to delete cells in a radius
 4. Press Right Click to create a cell
 5. Note that the colors indicate cell cycle stage; (gray=G0, blue=G1, yellow=S, green=G2, red=M)
 

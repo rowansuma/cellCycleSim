@@ -5,20 +5,21 @@ max_particles_per_grid_cell = 8         # max particles per gridcell
 friction = 0.95                         # friction multiplier. 1 = no friction, 0 = no movement
 
 [cells]
-max_cell_count = 150000                 # max cell capacity
+max_cell_count = 100000                 # max cell capacity
 cell_radius = 0.002                     # scale of simulation. smaller = larger scale
-cell_cycle_duration = 240               # duration of the cell cycle (in ticks)
+cell_cycle_duration = 60                # duration of the cell cycle (in ticks)
 cell_repulsion = 0.005                  # how agressively cells repulse. larger = more aggressive
 reproduction_offset = 1.5               # distance from the parent that the daughter is created
 max_cell_speed = 0.004                  # max cell speed (in cell radii / tick)
 
 [inhibition]
+inhibition_radius = 1.99                # distance in which cells detect neighbors (in cell radii)
 inhibition_threshold = 1                # arbitrary point at which cells enter g0
 inhibition_exit_threshold = 0.2         # how low inhibition must fall to exit g0
 inhibition_factor = 0.05                # inhibition counter increment
 
 [ecm]
-max_ecm_count = 1000000                 # max ecm capacity
+max_ecm_count = 50000                   # max ecm capacity
 min_ecm_period = 20                     # shortest allowed time between ecm deposits
 ecm_detection_radius = 20               # distance cells detect ecm (in cell radii)
 ecm_threshold = 7                       # number of ecm at which cells cease ecm deposition
@@ -43,7 +44,6 @@ gene_cycle_length = 50                  # length of the x-axis for gene_points
 
 [display]
 cell_radius_scalar = 1.0                # visual size multiplier for visibility at large scales
-display_phase = true                    # display cell cycle phases?
 phase_colors = [                        # color palette for cell phases
     0x858585,
     0x66ccff,
@@ -53,4 +53,4 @@ phase_colors = [                        # color palette for cell phases
 ]
 
 [tools]
-scalpel_radius = 0.05                   # scalpel tool radius
+scalpel_radius = 0.10                   # scalpel tool radius
