@@ -4,6 +4,10 @@ grid_scale_factor = 1.5                 # gridcell size multiplier, decrease for
 max_particles_per_grid_cell = 8         # max particles per gridcell
 friction = 0.95                         # friction multiplier. 1 = no friction, 0 = no movement
 
+[experiment]
+initial_mode = "single"                 # options: single (1 cell), full (entire space filled with cells)
+initial_wound = "none"                  # creates an initial wound in a full tissue. options: none, circle, triangle, square
+
 [cells]
 max_cell_count = 100000                 # max cell capacity
 cell_radius = 0.002                     # scale of simulation. smaller = larger scale

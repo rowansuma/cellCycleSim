@@ -72,3 +72,21 @@ class FibroblastHandler(CellHandler):
         FibroblastHandler.parent.copy_back_buffer_index(self, i)
         self.lastECMField[i] = self.lastECMFieldBuffer[i]
         self.ecmPeriodField[i] = self.ecmPeriodFieldBuffer[i]
+
+    def export_state(self):
+        return FibroblastHandler.parent.export_state(self) | {
+            "lastECMField": self.lastECMField.to_numpy(),
+            "ecmPeriodField": self.ecmPeriodField.to_numpy(),
+
+            "lastECMFieldBuffer": self.lastECMFieldBuffer.to_numpy(),
+            "ecmPeriodFieldBuffer": self.ecmPeriodFieldBuffer.to_numpy(),
+        }
+
+    def load_state(self, data):
+        FibroblastHandler.parent.load_state(self, data)
+
+        self.lastECMField.from_numpy(data["lastECMField"])
+        self.ecmPeriodField.from_numpy(data["ecmPeriodField"])
+
+        self.lastECMFieldBuffer.from_numpy(data["lastECMFieldBuffer"])
+        self.ecmPeriodFieldBuffer.from_numpy(data["ecmPeriodFieldBuffer"])
