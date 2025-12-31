@@ -85,3 +85,17 @@ class MovingParticleHandler(ParticleHandler):
     def copy_back_buffer_index(self, i):
         MovingParticleHandler.parent.copy_back_buffer_index(self, i)
         self.prevPosField[i] = self.prevPosFieldBuffer[i]
+
+    def export_state(self):
+        return MovingParticleHandler.parent.export_state(self) | {
+            "prevPosField": self.prevPosField.to_numpy(),
+
+            "prevPosFieldBuffer": self.prevPosFieldBuffer.to_numpy(),
+        }
+
+    def load_state(self, data):
+        MovingParticleHandler.parent.load_state(self, data)
+
+        self.prevPosField.from_numpy(data["prevPosField"])
+
+        self.prevPosFieldBuffer.from_numpy(data["prevPosFieldBuffer"])

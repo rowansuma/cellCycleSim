@@ -114,6 +114,8 @@ with open('data/sample_pos_data.csv', 'w') as csv_file2:
     csv_writer2 = csv.DictWriter(csv_file2, fieldnames=pos_fieldnames)
     csv_writer2.writeheader()
 
+env.experimental_setup()
+
 # Main Loop
 # Write to CSV
 with open('data/data.csv', 'a') as csv_file:
@@ -128,10 +130,13 @@ with open('data/data.csv', 'a') as csv_file:
                         LMB_down = True
                     elif e.type == ti.GUI.RELEASE:
                         LMB_down = False
-                if e.key == ti.GUI.RMB and e.type == ti.GUI.PRESS:
-                    env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
-                if e.key == ti.GUI.SPACE and e.type == ti.GUI.PRESS:
-                    env.paused = not env.paused
+                if e.type == ti.GUI.PRESS:
+                    if e.key == ti.GUI.RMB:
+                        env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
+                    if e.key == ti.GUI.SPACE:
+                        env.paused = not env.paused
+                    if e.key == ti.GUI.SHIFT:
+                        env.save_state()
 
             # Deletion
             if env.paused and LMB_down and mouse_pos is not None:
@@ -192,22 +197,22 @@ with open('data/data.csv', 'a') as csv_file:
             info = {
                 "step": env.step[None],
                 "population": env.fibroHandler.count[None],
-                "ecm": env.ecmHandler.count[None],
-                "g0": np.count_nonzero(phases == 0)*100/env.fibroHandler.count[None],
-                "g1": np.count_nonzero(phases == 1)*100/env.fibroHandler.count[None],
-                "s": np.count_nonzero(phases == 2)*100/env.fibroHandler.count[None],
-                "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.fibroHandler.count[None],
-                "gene0": env.fibroHandler.geneField[0][0],
-                "gene1": env.fibroHandler.geneField[0][1],
-                "gene2": env.fibroHandler.geneField[0][2],
-                "gene3": env.fibroHandler.geneField[0][3],
-                "gene4": env.fibroHandler.geneField[0][4],
-                "gene5": env.fibroHandler.geneField[0][5],
-                "gene6": env.fibroHandler.geneField[0][6],
-                "gene7": env.fibroHandler.geneField[0][7],
-                "gene8": env.fibroHandler.geneField[0][8],
-                "gene9": env.fibroHandler.geneField[0][9],
-                "gene10": env.fibroHandler.geneField[0][10],
+                "ecm": env.ecmHandler.count[None]
+                # "g0": np.count_nonzero(phases == 0)*100/env.fibroHandler.count[None],
+                # "g1": np.count_nonzero(phases == 1)*100/env.fibroHandler.count[None],
+                # "s": np.count_nonzero(phases == 2)*100/env.fibroHandler.count[None],
+                # "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.fibroHandler.count[None],
+                # "gene0": env.fibroHandler.geneField[0][0],
+                # "gene1": env.fibroHandler.geneField[0][1],
+                # "gene2": env.fibroHandler.geneField[0][2],
+                # "gene3": env.fibroHandler.geneField[0][3],
+                # "gene4": env.fibroHandler.geneField[0][4],
+                # "gene5": env.fibroHandler.geneField[0][5],
+                # "gene6": env.fibroHandler.geneField[0][6],
+                # "gene7": env.fibroHandler.geneField[0][7],
+                # "gene8": env.fibroHandler.geneField[0][8],
+                # "gene9": env.fibroHandler.geneField[0][9],
+                # "gene10": env.fibroHandler.geneField[0][10],
             }
             csv_writer.writerow(info)
 

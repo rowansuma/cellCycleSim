@@ -127,3 +127,19 @@ class ParticleHandler:
     def clamp_count(self):
         if self.count[None] > self.MAX_COUNT:
             self.count[None] = self.MAX_COUNT
+
+    def export_state(self):
+        return {
+            "count": self.count.to_numpy(),
+
+            "posField": self.posField.to_numpy(),
+
+            "posFieldBuffer": self.posFieldBuffer.to_numpy(),
+        }
+
+    def load_state(self, data):
+        self.count.from_numpy(data["count"])
+
+        self.posField.from_numpy(data["posField"])
+
+        self.posFieldBuffer.from_numpy(data["posFieldBuffer"])

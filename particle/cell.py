@@ -258,3 +258,41 @@ class CellHandler(MovingParticleHandler):
         self.mvmtField[i] = self.mvmtFieldBuffer[i]
         self.cycleDurField[i] = self.cycleDurFieldBuffer[i]
         self.geneField[i] = self.geneFieldBuffer[i]
+
+    def export_state(self):
+        return CellHandler.parent.export_state(self) | {
+            "lastDivField": self.lastDivField.to_numpy(),
+            "inhibitionField": self.inhibitionField.to_numpy(),
+            "neighborField": self.neighborField.to_numpy(),
+            "phaseField": self.phaseField.to_numpy(),
+            "mvmtField": self.mvmtField.to_numpy(),
+            "cycleDurField": self.cycleDurField.to_numpy(),
+            "geneField": self.geneField.to_numpy(),
+
+            "lastDivFieldBuffer": self.lastDivFieldBuffer.to_numpy(),
+            "inhibitionFieldBuffer": self.inhibitionFieldBuffer.to_numpy(),
+            "neighborFieldBuffer": self.neighborFieldBuffer.to_numpy(),
+            "phaseFieldBuffer": self.phaseFieldBuffer.to_numpy(),
+            "mvmtFieldBuffer": self.mvmtFieldBuffer.to_numpy(),
+            "cycleDurFieldBuffer": self.cycleDurFieldBuffer.to_numpy(),
+            "geneFieldBuffer": self.geneFieldBuffer.to_numpy(),
+        }
+
+    def load_state(self, data):
+        CellHandler.parent.load_state(self, data)
+
+        self.lastDivField.from_numpy(data["lastDivField"])
+        self.inhibitionField.from_numpy(data["inhibitionField"])
+        self.neighborField.from_numpy(data["neighborField"])
+        self.phaseField.from_numpy(data["phaseField"])
+        self.mvmtField.from_numpy(data["mvmtField"])
+        self.cycleDurField.from_numpy(data["cycleDurField"])
+        self.geneField.from_numpy(data["geneField"])
+
+        self.lastDivFieldBuffer.from_numpy(data["lastDivFieldBuffer"])
+        self.inhibitionFieldBuffer.from_numpy(data["inhibitionFieldBuffer"])
+        self.neighborFieldBuffer.from_numpy(data["neighborFieldBuffer"])
+        self.phaseFieldBuffer.from_numpy(data["phaseFieldBuffer"])
+        self.mvmtFieldBuffer.from_numpy(data["mvmtFieldBuffer"])
+        self.cycleDurFieldBuffer.from_numpy(data["cycleDurFieldBuffer"])
+        self.geneFieldBuffer.from_numpy(data["geneFieldBuffer"])
