@@ -4,7 +4,6 @@ from datetime import datetime
 from pathlib import Path
 
 from particle.ecm import ECMHandler
-from particle.cell import CellHandler
 from particle.fibroblast import FibroblastHandler
 
 
@@ -16,6 +15,7 @@ class Env:
         # Constants
         self.INITIAL_MODE = config["experiment"]["initial_mode"]
         self.INITIAL_WOUND = config["experiment"]["initial_wound"]
+        self.END_STEP = config["experiment"]["end_step"]
 
         self.MAX_CELL_COUNT = config["cells"]["max_cell_count"]
         self.CELL_RADIUS = config["cells"]["cell_radius"]
@@ -46,11 +46,6 @@ class Env:
         self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
         self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
 
-        self.GENE_POINTS = ti.Vector.field(2, dtype=ti.f32, shape=(11, 2))
-        self.GENE_POINTS.from_numpy(np.array(config["genes"]["gene_points"], dtype=np.float32))
-        self.GENE_VARIATION = config["genes"]["gene_variation"]
-        self.GENE_CYCLE_LENGTH = config["genes"]["gene_cycle_length"]
-
         self.SCALPEL_RADIUS = config["tools"]["scalpel_radius"]
 
         self.EPSILON = 1e-5
@@ -62,7 +57,6 @@ class Env:
         self.topoField = ti.field(dtype=ti.f32, shape=(self.GRID_RES, self.GRID_RES))
 
         self.paused = False
-        self.loaded = False
 
         # Handlers
         self.fibroHandler = FibroblastHandler(self)
@@ -128,6 +122,8 @@ class Env:
         self.fibroHandler.load_state(np.load(path+"/fibroblast_state.npz"))
         self.ecmHandler.load_state(np.load(path+"/ecm_state.npz"))
 
+    # CELL KERNELS
+
     @ti.kernel
     def verlet_step_cells_kernel(self):
         self.fibroHandler.verlet_step()
@@ -137,63 +133,44 @@ class Env:
         self.fibroHandler.border_constraints()
 
     @ti.kernel
-    def rebuild_grid_cells_kernel(self):
-        self.fibroHandler.rebuild_grid()
-
-    @ti.kernel
     def handle_collisions_cells_kernel(self): # Collisions
         self.fibroHandler.handle_collisions()
 
     @ti.kernel
-    def update_kernel(self): # Collisions
-        self.fibroHandler.update()
-        self.ecmHandler.update()
-
-    @ti.kernel
-    def rebuild_grid_ecm_kernel(self):
-        self.ecmHandler.rebuild_grid()
-
-    @ti.kernel
-    def mark_cells_for_deletion_kernel(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
-        self.fibroHandler.mark_for_deletion(mouse_x, mouse_y, size, shape)
-
-    @ti.kernel
-    def mark_ecm_for_deletion_kernel(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
-        self.ecmHandler.mark_for_deletion(mouse_x, mouse_y, size, shape)
-
-    # @ti.kernel
-    # def clear_topo_field(self):
-    #     for i, j in self.topoField:
-    #         self.topoField[i, j] = 0.0
-    #
-    # @ti.kernel
-    # def accumulate_density(self):
-    #     for i in range(self.fibroHandler.count[None]):
-    #         pos = self.fibroHandler.posField[i]
-    #         x = ti.min(ti.max(int(pos[0] * self.GRID_RES), 0), self.GRID_RES - 1)
-    #         y = ti.min(ti.max(int(pos[1] * self.GRID_RES), 0), self.GRID_RES - 1)
-    #         ti.atomic_add(self.topoField[x, y], 1.0)
-
-    @ti.kernel
-    def write_buffer_cells_kernel(self): # Write to-be-swapped cells to buffer
-        self.fibroHandler.write_buffer()
-
-    @ti.kernel
-    def write_buffer_ecm_kernel(self):
-        self.ecmHandler.write_buffer()
-
-    @ti.kernel
-    def copy_back_buffer_cells_kernel(self): # Write the buffer cells back to main fields
-        self.fibroHandler.copy_back_buffer()
-
-    @ti.kernel
-    def copy_back_buffer_ecm_kernel(self):
-        self.ecmHandler.copy_back_buffer()
+    def rebuild_grid_cells_kernel(self):
+        self.fibroHandler.rebuild_grid()
 
     @ti.kernel
     def create_cell_kernel(self, posX: ti.f32, posY: ti.f32):
         self.fibroHandler.create(posX, posY)
 
     @ti.kernel
+    def delete_cells_kernel(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
+        self.fibroHandler.mark_for_deletion(mouse_x, mouse_y, size, shape)
+        self.fibroHandler.write_buffer()
+        self.fibroHandler.copy_back_buffer()
+        self.fibroHandler.rebuild_grid()
+
+    # ECM KERNELS
+
+    @ti.kernel
+    def rebuild_grid_ecm_kernel(self):
+        self.ecmHandler.rebuild_grid()
+
+    @ti.kernel
     def create_ecm_kernel(self, posX: ti.f32, posY: ti.f32):
         self.ecmHandler.create(posX, posY)
+
+    @ti.kernel
+    def delete_ecm_kernel(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32):
+        self.ecmHandler.mark_for_deletion(mouse_x, mouse_y, size, shape)
+        self.ecmHandler.write_buffer()
+        self.ecmHandler.copy_back_buffer()
+        self.ecmHandler.rebuild_grid()
+
+    # LOGIC KERNELS
+
+    @ti.kernel
+    def update_kernel(self):
+        self.fibroHandler.update()
+        self.ecmHandler.update()

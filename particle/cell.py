@@ -16,7 +16,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseField = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
         self.mvmtField = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_COUNT)
         self.cycleDurField = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)  # Cycle duration
-        self.geneField = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_COUNT)
 
         # Buffer Fields
         self.lastDivFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
@@ -25,73 +24,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
         self.mvmtFieldBuffer = ti.Vector.field(3, dtype=ti.f32, shape=self.MAX_COUNT)
         self.cycleDurFieldBuffer = ti.field(dtype=ti.i32, shape=self.MAX_COUNT)
-        self.geneFieldBuffer = ti.Vector.field(11, dtype=ti.f32, shape=self.MAX_COUNT)
-
-    @ti.func
-    def calc_starting_genes(self, idx: ti.i32):
-        for gene_idx in range(11):
-            firstPoint = self.env.GENE_POINTS[gene_idx, 0]
-            lastPoint = self.env.GENE_POINTS[gene_idx, 1]
-            beforePoint = (lastPoint[0]-self.env.GENE_CYCLE_LENGTH, lastPoint[1])
-            m = (firstPoint[1]-beforePoint[1]) / (firstPoint[0]-beforePoint[0])
-            b = firstPoint[1] - m * firstPoint[0]
-            self.geneField[idx][gene_idx] = b
-        ti.static_print(self.geneField[idx])
-
-    @ti.func
-    def update_genes(self, idx: ti.i32):
-        cycleTime = (self.env.step[None] - self.lastDivField[idx]) / self.env.CELL_CYCLE_DURATION[None]
-        for gene_idx in range(11):
-            # Find last and next points
-            last_x = -float('inf')
-            next_x = float('inf')
-            last_point = ti.Vector([0.0, 0.0])
-            next_point = ti.Vector([0.0, 0.0])
-            max_x = -float('inf')
-            min_x = float('inf')
-            max_point = ti.Vector([0.0, 0.0])
-            min_point = ti.Vector([0.0, 0.0])
-
-            # Normalize points
-            for point_idx in range(2):
-                point = self.env.GENE_POINTS[gene_idx, point_idx]
-                x = point[0] / 50
-                y = point[1]
-                if cycleTime >= x > last_x:
-                    last_x = x
-                    last_point = ti.Vector([x, y])
-                if cycleTime <= x < next_x:
-                    next_x = x
-                    next_point = ti.Vector([x, y])
-                if x > max_x:
-                    max_x = x
-                    max_point = ti.Vector([x, y])
-                if x < min_x:
-                    min_x = x
-                    min_point = ti.Vector([x, y])
-
-            # Edge cases
-            if last_x == -float('inf'):
-                last_point = ti.Vector([max_x - 1.0, max_point[1]])
-            if next_x == float('inf'):
-                next_point = ti.Vector([min_x + 1.0, min_point[1]])
-
-            x0 = last_point[0]
-            y0 = last_point[1]
-            x1 = next_point[0]
-            y1 = next_point[1]
-
-            if x1 != x0 and x0 <= cycleTime <= x1:
-                increment = (y1 - y0) / (x1 - x0) / self.env.CELL_CYCLE_DURATION[None]
-                # Add small random variation
-                noise = (ti.random() - 0.5) * self.env.GENE_VARIATION
-                self.geneField[idx][gene_idx] += increment + noise
-                if (y0 < y1 < self.geneField[idx][gene_idx]) or (y0 > y1 > self.geneField[idx][gene_idx]):
-                    self.geneField[idx][gene_idx] = y1
-            elif cycleTime < x0:
-                self.geneField[idx][gene_idx] = y0
-            elif cycleTime > x1:
-                self.geneField[idx][gene_idx] = y1
 
     @ti.func
     def apply_locomotion(self, i: ti.i32):
@@ -122,7 +54,6 @@ class CellHandler(MovingParticleHandler):
 
             if ti.random() < 0.3:
                 r = ti.random()
-                val = 0
                 if r < 1/3:
                     val = -1
                 elif r < 2/3:
@@ -148,7 +79,6 @@ class CellHandler(MovingParticleHandler):
     @ti.func
     def handleCellDependentBehavior(self, i: ti.i32):
         self.handle_cell_cycle(i)
-        self.update_genes(i)
 
     @ti.func
     def collide(self, i, other, dist):
@@ -224,7 +154,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseField[index] = -1
         self.mvmtField[index] = [-1, -1, -1]
         self.cycleDurField[index] = -1
-        self.geneField[index] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
 
     @ti.func
     def initialize(self, idx: ti.i32, pos: ti.template()):
@@ -235,7 +164,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseField[idx] = 1
         self.mvmtField[idx] = [ti.random(), 0, self.env.MAX_CELL_SPEED]
         self.cycleDurField[idx] = self.env.CELL_CYCLE_DURATION[None] + int((ti.random() - 0.5) * 10)
-        self.calc_starting_genes(idx)
 
     @ti.func
     def write_buffer_index(self, buffer_i, i):
@@ -246,7 +174,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseFieldBuffer[buffer_i] = self.phaseField[i]
         self.mvmtFieldBuffer[buffer_i] = self.mvmtField[i]
         self.cycleDurFieldBuffer[buffer_i] = self.cycleDurField[i]
-        self.geneFieldBuffer[buffer_i] = self.geneField[i]
 
     @ti.func
     def copy_back_buffer_index(self, i):
@@ -257,7 +184,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseField[i] = self.phaseFieldBuffer[i]
         self.mvmtField[i] = self.mvmtFieldBuffer[i]
         self.cycleDurField[i] = self.cycleDurFieldBuffer[i]
-        self.geneField[i] = self.geneFieldBuffer[i]
 
     def export_state(self):
         return CellHandler.parent.export_state(self) | {
@@ -267,7 +193,6 @@ class CellHandler(MovingParticleHandler):
             "phaseField": self.phaseField.to_numpy(),
             "mvmtField": self.mvmtField.to_numpy(),
             "cycleDurField": self.cycleDurField.to_numpy(),
-            "geneField": self.geneField.to_numpy(),
 
             "lastDivFieldBuffer": self.lastDivFieldBuffer.to_numpy(),
             "inhibitionFieldBuffer": self.inhibitionFieldBuffer.to_numpy(),
@@ -275,7 +200,6 @@ class CellHandler(MovingParticleHandler):
             "phaseFieldBuffer": self.phaseFieldBuffer.to_numpy(),
             "mvmtFieldBuffer": self.mvmtFieldBuffer.to_numpy(),
             "cycleDurFieldBuffer": self.cycleDurFieldBuffer.to_numpy(),
-            "geneFieldBuffer": self.geneFieldBuffer.to_numpy(),
         }
 
     def load_state(self, data):
@@ -287,7 +211,6 @@ class CellHandler(MovingParticleHandler):
         self.phaseField.from_numpy(data["phaseField"])
         self.mvmtField.from_numpy(data["mvmtField"])
         self.cycleDurField.from_numpy(data["cycleDurField"])
-        self.geneField.from_numpy(data["geneField"])
 
         self.lastDivFieldBuffer.from_numpy(data["lastDivFieldBuffer"])
         self.inhibitionFieldBuffer.from_numpy(data["inhibitionFieldBuffer"])
@@ -295,4 +218,3 @@ class CellHandler(MovingParticleHandler):
         self.phaseFieldBuffer.from_numpy(data["phaseFieldBuffer"])
         self.mvmtFieldBuffer.from_numpy(data["mvmtFieldBuffer"])
         self.cycleDurFieldBuffer.from_numpy(data["cycleDurFieldBuffer"])
-        self.geneFieldBuffer.from_numpy(data["geneFieldBuffer"])
