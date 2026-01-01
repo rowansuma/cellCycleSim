@@ -1,29 +1,23 @@
-import random
-
 import taichi as ti
 import tomli
 import os
 import shutil
-from env import Env
 import csv
 import socket
 import threading
 import subprocess
 import atexit
 import sys
-import numpy as np
 
-# Start plot.py as a subprocess
+from env import Env
+
 plot_proc = subprocess.Popen([sys.executable, "plot.py"])
 
-# Ensure it gets killed when main.py exits
 def cleanup():
-    print("Cleaning up: killing plot.py")
-    plot_proc.terminate()  # Send SIGTERM
+    plot_proc.terminate()
     try:
         plot_proc.wait(timeout=3)
     except subprocess.TimeoutExpired:
-        print("plot.py didn't terminate in time. Forcing kill.")
         plot_proc.kill()
 
 def command_server():
@@ -32,10 +26,8 @@ def command_server():
     global display_ecm
     global cycle_scalpel
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('localhost', 65432))  # Choose your port, must match client
+    server.bind(('localhost', 65432))
     server.listen()
-
-    print("Command server started, waiting for connections...")
 
     while True:
         conn, addr = server.accept()
@@ -54,14 +46,12 @@ def command_server():
                 cycle_scalpel += 1
                 if cycle_scalpel == 3:
                     cycle_scalpel = 0
-            # You can add more commands here
             conn.sendall(b'OK')
 
 
 atexit.register(cleanup)
 
 ti.init(arch=ti.gpu)
-
 
 if not os.path.exists("config.toml"):
     shutil.copyfile("defaultconfig.toml", "config.toml")
@@ -75,185 +65,100 @@ display_cells = True
 display_ecm = True
 cycle_scalpel = 0
 
-
 env = Env(config)
 threading.Thread(target=command_server, daemon=True).start()
 
 gui = ti.GUI("Cell Cycle Sim", res=env.SCREEN_SIZE)
 
-# Constants
-SAMPLE_INTERVAL = 500
-NUM_TIME_COLORS = 40  # number of discrete time steps (colors)
-SCREEN_WIDTH, SCREEN_HEIGHT = env.SCREEN_SIZE
-bucket_modifier = 8
-
 # Data output location
 os.makedirs("data", exist_ok=True)
-
-# Topographical pixel map to accumulate cell locations over time
-topo_map = np.zeros((int(SCREEN_WIDTH/bucket_modifier), int(SCREEN_HEIGHT/bucket_modifier)), dtype=np.uint8)
-sample_index = 1
 
 LMB_down = False
 
 hour = 0
 
-fieldnames = ["step", "population", "ecm", "g0", "g1", "s", "g2/m", "gene0", "gene1", "gene2", "gene3", "gene4", "gene5", "gene6", "gene7", "gene8", "gene9", "gene10"]
-
-pos_fieldnames = []
-n = 50
-for i in range(n*2):
-    d = "xy"
-    pos_fieldnames.append(f"{d[i % 2]}{i // 2 + 1}")
+fieldnames = ["step", "population", "ecm"]
 
 with open('data/data.csv', 'w') as csv_file:
     csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
     csv_writer.writeheader()
 
-with open('data/sample_pos_data.csv', 'w') as csv_file2:
-    csv_writer2 = csv.DictWriter(csv_file2, fieldnames=pos_fieldnames)
-    csv_writer2.writeheader()
-
 env.experimental_setup()
 
 # Main Loop
-# Write to CSV
 with open('data/data.csv', 'a') as csv_file:
-    with open('data/sample_pos_data.csv', 'a') as csv_file2:
-        while gui.running:
-            # Mouse Button Handling
-            mouse_pos = gui.get_cursor_pos()
+    while gui.running and (env.END_STEP == -1 or env.step[None] < env.END_STEP):
+        # Input Handling
+        mouse_pos = gui.get_cursor_pos()
 
-            for e in gui.get_events():
+        for e in gui.get_events():
+            if e.type == ti.GUI.PRESS:
                 if e.key == ti.GUI.LMB:
-                    if e.type == ti.GUI.PRESS:
-                        LMB_down = True
-                    elif e.type == ti.GUI.RELEASE:
-                        LMB_down = False
-                if e.type == ti.GUI.PRESS:
-                    if e.key == ti.GUI.RMB:
-                        env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
-                    if e.key == ti.GUI.SPACE:
-                        env.paused = not env.paused
-                    if e.key == ti.GUI.SHIFT:
-                        env.save_state()
+                    LMB_down = True
+                if e.key == ti.GUI.RMB:
+                    env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
+                if e.key == ti.GUI.SPACE:
+                    env.paused = not env.paused
+                if e.key == ti.GUI.SHIFT:
+                    env.save_state()
+            elif e.type == ti.GUI.RELEASE:
+                if e.key == ti.GUI.LMB:
+                    LMB_down = False
 
-            # Deletion
-            if env.paused and LMB_down and mouse_pos is not None:
-                env.mark_cells_for_deletion_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
-                env.write_buffer_cells_kernel()
-                env.copy_back_buffer_cells_kernel()
-                env.rebuild_grid_cells_kernel()
-                if not gui.is_pressed(ti.GUI.SHIFT):
-                    env.mark_ecm_for_deletion_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
-                    env.write_buffer_ecm_kernel()
-                    env.copy_back_buffer_ecm_kernel()
-                    env.rebuild_grid_ecm_kernel()
+        # Deletion
+        if env.paused and LMB_down and mouse_pos is not None:
+            env.delete_cells_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
+            if not gui.is_pressed(ti.GUI.SHIFT):
+                env.delete_ecm_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
 
-            if display_ecm:
+        if display_ecm:
+            gui.circles(
+                env.ecmHandler.posField.to_numpy()[:env.ecmHandler.count[None]],
+                radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
+                color=0x252345
+            )
+        if display_cells:
+            positions = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
+            if display_phase:
                 gui.circles(
-                    env.ecmHandler.posField.to_numpy()[:env.ecmHandler.count[None]],
+                    positions,
                     radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
-                    color=0x252345
+                    color=env.PHASE_COLORS[env.fibroHandler.phaseField.to_numpy()[:env.fibroHandler.count[None]]]
                 )
-            phases = env.fibroHandler.phaseField.to_numpy()[:env.fibroHandler.count[None]]
-            if display_cells:
-                positions = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
-                if display_phase:
-                    colors = env.PHASE_COLORS[phases]
+            else:
+                gui.circles(positions, radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0xffffff)
 
-                    gui.circles(
-                        positions,
-                        radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
-                        color=colors
-                    )
-                else:
-                    gui.circles(positions, radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR, color=0xffffff)
+        gui.show()
 
-            # gui.arrows(
-            #     orig=env.posField.to_numpy()[:env.cellsAlive[None]], direction=env.repulseField.to_numpy()[:env.cellsAlive[None]],
-            #     radius=1,
-            #     color=0xffffff
-            # )
-            gui.show()
+        if env.paused:
+            continue
 
-            if env.paused:
-                continue
+        # env.clear_topo_field()
+        for _ in range(env.SUBSTEPS):  # Do multiple steps per frame for stability
+            env.verlet_step_cells_kernel()
+            env.border_constraints_cell_kernel()
+            env.rebuild_grid_cells_kernel()
+            env.handle_collisions_cells_kernel()
 
-            # env.clear_topo_field()
-            for _ in range(env.SUBSTEPS):  # Do multiple steps per frame for stability
-                env.verlet_step_cells_kernel()
-                env.border_constraints_cell_kernel()
-                env.rebuild_grid_cells_kernel()
-                env.handle_collisions_cells_kernel()
+        env.update_kernel()
 
-            env.update_kernel()
+        env.rebuild_grid_ecm_kernel()
 
-            env.rebuild_grid_ecm_kernel()
-            # env.accumulate_density()
+        csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        info = {
+            "step": env.step[None],
+            "population": env.fibroHandler.count[None],
+            "ecm": env.ecmHandler.count[None]
+        }
+        csv_writer.writerow(info)
 
-            csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        warn = ""
+        if env.fibroHandler.count[None] == env.MAX_CELL_COUNT:
+            warn = " | Warning: Max Cell Count Reached!"
+        if env.step[None] % 10 == 0:
+            print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.fibroHandler.count[None]) + warn)
 
-            info = {
-                "step": env.step[None],
-                "population": env.fibroHandler.count[None],
-                "ecm": env.ecmHandler.count[None]
-                # "g0": np.count_nonzero(phases == 0)*100/env.fibroHandler.count[None],
-                # "g1": np.count_nonzero(phases == 1)*100/env.fibroHandler.count[None],
-                # "s": np.count_nonzero(phases == 2)*100/env.fibroHandler.count[None],
-                # "g2/m": (np.count_nonzero(phases == 3)+np.count_nonzero(phases == 4))*100/env.fibroHandler.count[None],
-                # "gene0": env.fibroHandler.geneField[0][0],
-                # "gene1": env.fibroHandler.geneField[0][1],
-                # "gene2": env.fibroHandler.geneField[0][2],
-                # "gene3": env.fibroHandler.geneField[0][3],
-                # "gene4": env.fibroHandler.geneField[0][4],
-                # "gene5": env.fibroHandler.geneField[0][5],
-                # "gene6": env.fibroHandler.geneField[0][6],
-                # "gene7": env.fibroHandler.geneField[0][7],
-                # "gene8": env.fibroHandler.geneField[0][8],
-                # "gene9": env.fibroHandler.geneField[0][9],
-                # "gene10": env.fibroHandler.geneField[0][10],
-            }
-            csv_writer.writerow(info)
+        hour += 24/env.CELL_CYCLE_DURATION[None]
+        env.step[None] += 1
 
-            csv_writer2 = csv.DictWriter(csv_file2, fieldnames=pos_fieldnames)
-
-            info2 = {}
-            pos_list = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
-            i = 0
-            for key in pos_fieldnames:
-                info2[key] = pos_list[i // 2][i % 2] if i < len(pos_list) * 2 else None
-                i += 1
-            csv_writer2.writerow(info2)
-
-            if env.step[None] % SAMPLE_INTERVAL == 0 and env.fibroHandler.count[None] > 0:
-                positions = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
-                # cycle_stages = env.phaseField.to_numpy()[:env.cellsAlive[None]]
-                idx = 0
-                for pos in positions:
-                    # if cycle_stages[idx] != 0:
-                    #     continue
-                    x = round(int(pos[0] * SCREEN_WIDTH)/bucket_modifier)
-                    y = round(int(pos[1] * SCREEN_HEIGHT)/bucket_modifier)
-                    if 0 <= x < SCREEN_WIDTH and 0 <= y < SCREEN_HEIGHT:
-                        try:
-                            if topo_map[x, y] == 0:
-                                topo_map[x, y] = min(sample_index, NUM_TIME_COLORS)
-                        except IndexError:
-                            print(f"IndexError at position ({x}, {y}) with sample index {sample_index}")
-                    idx += 1
-                sample_index += 1
-
-
-            warn = ""
-            if env.fibroHandler.count[None] == env.MAX_CELL_COUNT:
-                warn = " | Warning: Max Cell Count Reached!"
-            if env.step[None] % 10 == 0:
-                print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.fibroHandler.count[None]) + warn)
-
-            hour += 24/env.CELL_CYCLE_DURATION[None]
-
-            env.step[None] += 1
-
-np.save("data/topo_map.npy", topo_map)
-
+gui.close()
