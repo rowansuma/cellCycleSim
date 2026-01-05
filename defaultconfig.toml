@@ -8,6 +8,9 @@ friction = 0.95                         # friction multiplier. 1 = no friction, 
 initial_mode = "single"                 # options: single (1 cell), full (entire space filled with cells)
 initial_wound = "none"                  # creates an initial wound in a full tissue. options: none, circle, triangle, square
 end_step = -1                           # ends the simulation at this specified time step (-1 = unending)
+capture_data = false                    # capture and save permanent experiment data?
+data_path = ""                          # path to folder where all experiment data will be stored
+max_image_pixel_cells = 10              # maximum number of fibroblasts in a pixel in image capture mode before the pixel turns white
 
 [cells]
 max_cell_count = 100000                 # max cell capacity

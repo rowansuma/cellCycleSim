@@ -1,8 +1,9 @@
 import taichi as ti
 import numpy as np
 from datetime import datetime
-from pathlib import Path
 
+from tools.imaging_handler import ImagingHandler
+from tools.save_handler import SaveHandler
 from particle.ecm import ECMHandler
 from particle.fibroblast import FibroblastHandler
 
@@ -16,6 +17,9 @@ class Env:
         self.INITIAL_MODE = config["experiment"]["initial_mode"]
         self.INITIAL_WOUND = config["experiment"]["initial_wound"]
         self.END_STEP = config["experiment"]["end_step"]
+        self.CAPTURE_DATA = config["experiment"]["capture_data"]
+        self.DATA_PATH = config["experiment"]["data_path"]
+        self.MAX_IMAGE_PIXEL_CELLS = config["experiment"]["max_image_pixel_cells"]
 
         self.MAX_CELL_COUNT = config["cells"]["max_cell_count"]
         self.CELL_RADIUS = config["cells"]["cell_radius"]
@@ -50,6 +54,8 @@ class Env:
 
         self.EPSILON = 1e-5
 
+        self.EXPERIMENT_TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
 
@@ -61,6 +67,9 @@ class Env:
         # Handlers
         self.fibroHandler = FibroblastHandler(self)
         self.ecmHandler = ECMHandler(self)
+
+        self.saveHandler = SaveHandler({"fibroblast": self.fibroHandler, "ecm": self.ecmHandler})
+        self.imagingHandler = ImagingHandler(self)
 
         self.initialize_board()
 
@@ -76,7 +85,7 @@ class Env:
         if self.INITIAL_MODE == "single":
             self.create_cell_kernel(0.5, 0.5)
         elif self.INITIAL_MODE == "full":
-            self.load_state("defaultstates/full_state")
+            self.saveHandler.load_state("defaultstates/full_state")
         else:
             raise Exception("Invalid initial mode: " + self.INITIAL_MODE)
 
@@ -102,25 +111,6 @@ class Env:
 
         if self.INITIAL_WOUND != "none":
             initial_wound_kernel()
-
-    def save_state(self):
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-        save_dir = Path("savestates") / f"save_{timestamp}"
-        save_dir.mkdir(parents=True, exist_ok=True)
-
-        np.savez_compressed(
-            save_dir / f"fibroblast_state.npz",
-            **self.fibroHandler.export_state()
-        )
-        np.savez_compressed(
-            save_dir / f"ecm_state.npz",
-            **self.ecmHandler.export_state()
-        )
-
-    def load_state(self, path):
-        self.fibroHandler.load_state(np.load(path+"/fibroblast_state.npz"))
-        self.ecmHandler.load_state(np.load(path+"/ecm_state.npz"))
 
     # CELL KERNELS
 
