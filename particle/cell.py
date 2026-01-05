@@ -54,6 +54,7 @@ class CellHandler(MovingParticleHandler):
 
             if ti.random() < 0.3:
                 r = ti.random()
+                val = 0
                 if r < 1/3:
                     val = -1
                 elif r < 2/3:

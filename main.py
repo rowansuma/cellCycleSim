@@ -100,7 +100,9 @@ with open('data/data.csv', 'a') as csv_file:
                 if e.key == ti.GUI.SPACE:
                     env.paused = not env.paused
                 if e.key == ti.GUI.SHIFT:
-                    env.save_state()
+                    env.saveHandler.save_state()
+                if e.key == ti.GUI.ALT:
+                    env.imagingHandler.capture_image()
             elif e.type == ti.GUI.RELEASE:
                 if e.key == ti.GUI.LMB:
                     LMB_down = False
@@ -151,6 +153,9 @@ with open('data/data.csv', 'a') as csv_file:
             "ecm": env.ecmHandler.count[None]
         }
         csv_writer.writerow(info)
+
+        if env.CAPTURE_DATA and env.step[None] % 60 == 0:
+            env.imagingHandler.capture_image(f"{env.DATA_PATH}/images/experiment_{env.EXPERIMENT_TIMESTAMP}")
 
         warn = ""
         if env.fibroHandler.count[None] == env.MAX_CELL_COUNT:
