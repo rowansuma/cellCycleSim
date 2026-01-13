@@ -1,24 +1,30 @@
 [environment]
-substeps = 5                            # iterations of collision logic ran per tick
+substeps = 3                            # iterations of collision logic ran per step
 grid_scale_factor = 1.5                 # gridcell size multiplier, decrease for large gridcells
 max_particles_per_grid_cell = 8         # max particles per gridcell
 friction = 0.95                         # friction multiplier. 1 = no friction, 0 = no movement
 
 [experiment]
+domain_size = 8500                      # length (in micrometers) of one side of the square simulation space
 initial_mode = "single"                 # options: single (1 cell), full (entire space filled with cells)
 initial_wound = "none"                  # creates an initial wound in a full tissue. options: none, circle, triangle, square
+wound_width = 5200                      # wound width / diameter / altitude (in micrometers)
 end_step = -1                           # ends the simulation at this specified time step (-1 = unending)
+
+[data_collection]
 capture_data = false                    # capture and save permanent experiment data?
 data_path = ""                          # path to folder where all experiment data will be stored
 max_image_pixel_cells = 10              # maximum number of fibroblasts in a pixel in image capture mode before the pixel turns white
+save_video = false                      # save video of imaging data?
+video_frame_rate = 8                    # frame rate in the video capture (fps)
 
 [cells]
 max_cell_count = 100000                 # max cell capacity
-cell_radius = 0.002                     # scale of simulation. smaller = larger scale
-cell_cycle_duration = 60                # duration of the cell cycle (in ticks)
+cell_radius = 17                        # fibroblast radius (in micrometers)
+cell_cycle_duration = 60                # duration of the cell cycle (in steps)
 cell_repulsion = 0.005                  # how agressively cells repulse. larger = more aggressive
 reproduction_offset = 1.5               # distance from the parent that the daughter is created
-max_cell_speed = 0.004                  # max cell speed (in cell radii / tick)
+max_cell_speed = 0.004                  # max cell speed (in cell radii / step)
 
 [inhibition]
 inhibition_radius = 1.99                # distance in which cells detect neighbors (in cell radii)
@@ -42,6 +48,3 @@ phase_colors = [                        # color palette for cell phases
     0x66ff66,
     0xff6699
 ]
-
-[tools]
-scalpel_radius = 0.10                   # scalpel tool radius

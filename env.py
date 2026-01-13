@@ -6,6 +6,7 @@ from tools.imaging_handler import ImagingHandler
 from tools.save_handler import SaveHandler
 from particle.ecm import ECMHandler
 from particle.fibroblast import FibroblastHandler
+from tools.statistic_handler import StatisticHandler
 
 
 @ti.data_oriented
@@ -14,15 +15,21 @@ class Env:
         self.SCREEN_SIZE = (1000, 1000)
 
         # Constants
+        self.DOMAIN_SIZE = config["experiment"]["domain_size"]
         self.INITIAL_MODE = config["experiment"]["initial_mode"]
         self.INITIAL_WOUND = config["experiment"]["initial_wound"]
+        self.WOUND_WIDTH = config["experiment"]["wound_width"]
         self.END_STEP = config["experiment"]["end_step"]
-        self.CAPTURE_DATA = config["experiment"]["capture_data"]
-        self.DATA_PATH = config["experiment"]["data_path"]
-        self.MAX_IMAGE_PIXEL_CELLS = config["experiment"]["max_image_pixel_cells"]
+
+        self.CAPTURE_DATA = config["data_collection"]["capture_data"]
+        self.DATA_PATH = config["data_collection"]["data_path"]
+        self.MAX_IMAGE_PIXEL_CELLS = config["data_collection"]["max_image_pixel_cells"]
+        self.SAVE_VIDEO = config["data_collection"]["save_video"]
+        self.VIDEO_FRAME_RATE = config["data_collection"]["video_frame_rate"]
 
         self.MAX_CELL_COUNT = config["cells"]["max_cell_count"]
-        self.CELL_RADIUS = config["cells"]["cell_radius"]
+        self.CELL_RADIUS_UM = config["cells"]["cell_radius"]
+        self.CELL_RADIUS = self.CELL_RADIUS_UM/config["experiment"]["domain_size"]
         if self.CELL_RADIUS <= 0.0002: self.CELL_RADIUS_SCALAR = 0.00024/self.CELL_RADIUS
         self.CELL_REPULSION = config["cells"]["cell_repulsion"]
         self.REPRODUCTION_OFFSET = config["cells"]["reproduction_offset"]
@@ -50,11 +57,10 @@ class Env:
         self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
         self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
 
-        self.SCALPEL_RADIUS = config["tools"]["scalpel_radius"]
-
         self.EPSILON = 1e-5
 
         self.EXPERIMENT_TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.INITIAL_WOUND_AREA = None
 
         # Taichi counters
         self.step = ti.field(dtype=ti.i32, shape=()) # 0
@@ -70,6 +76,7 @@ class Env:
 
         self.saveHandler = SaveHandler({"fibroblast": self.fibroHandler, "ecm": self.ecmHandler})
         self.imagingHandler = ImagingHandler(self)
+        self.statisticHandler = StatisticHandler(self)
 
         self.initialize_board()
 
@@ -92,19 +99,19 @@ class Env:
         if self.INITIAL_MODE == "single" and self.INITIAL_WOUND != "none":
             raise Exception("Wounds are not supported on the single cell initial setup.")
 
-        if self.INITIAL_WOUND not in ["none", "circle", "triangle", "square"]:
+        if self.INITIAL_WOUND not in ["none", "circle", "triangle", "square", "line"]:
             raise Exception("Invalid wound configuration: " + self.INITIAL_WOUND)
 
         @ti.kernel
         def initial_wound_kernel():
-            shape = {"circle": 0, "square": 1, "triangle": 2}[self.INITIAL_WOUND]
+            shape = {"circle": 0, "square": 1, "triangle": 2, "line": 3}[self.INITIAL_WOUND]
 
-            self.fibroHandler.mark_for_deletion(0.5, 0.5, self.SCALPEL_RADIUS, shape)
+            self.fibroHandler.mark_for_deletion(0.5, 0.5, self.WOUND_WIDTH, shape)
             self.fibroHandler.write_buffer()
             self.fibroHandler.copy_back_buffer()
             self.fibroHandler.rebuild_grid()
 
-            self.ecmHandler.mark_for_deletion(0.5, 0.5, self.SCALPEL_RADIUS, shape)
+            self.ecmHandler.mark_for_deletion(0.5, 0.5, self.WOUND_WIDTH, shape)
             self.ecmHandler.write_buffer()
             self.ecmHandler.copy_back_buffer()
             self.ecmHandler.rebuild_grid()

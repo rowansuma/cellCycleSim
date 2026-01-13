@@ -44,7 +44,7 @@ def command_server():
                 display_ecm = not display_ecm
             if cmd == "cycle_scalpel":
                 cycle_scalpel += 1
-                if cycle_scalpel == 3:
+                if cycle_scalpel == 4:
                     cycle_scalpel = 0
             conn.sendall(b'OK')
 
@@ -77,7 +77,7 @@ LMB_down = False
 
 hour = 0
 
-fieldnames = ["step", "population", "ecm"]
+fieldnames = ["step", "fibroblast_count", "ecm_count", "wound_area", "wound_width"]
 
 with open('data/data.csv', 'w') as csv_file:
     csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -88,6 +88,9 @@ env.experimental_setup()
 # Main Loop
 with open('data/data.csv', 'a') as csv_file:
     while gui.running and (env.END_STEP == -1 or env.step[None] < env.END_STEP):
+        if env.INITIAL_WOUND_AREA is None:
+            env.INITIAL_WOUND_AREA = env.statisticHandler.get_wound_area()
+
         # Input Handling
         mouse_pos = gui.get_cursor_pos()
 
@@ -99,19 +102,18 @@ with open('data/data.csv', 'a') as csv_file:
                     env.create_cell_kernel(mouse_pos[0], mouse_pos[1])
                 if e.key == ti.GUI.SPACE:
                     env.paused = not env.paused
-                if e.key == ti.GUI.SHIFT:
-                    env.saveHandler.save_state()
                 if e.key == ti.GUI.ALT:
-                    env.imagingHandler.capture_image()
+                    env.saveHandler.save_state()
+                if e.key == ti.GUI.ESCAPE:
+                    gui.running = False
             elif e.type == ti.GUI.RELEASE:
                 if e.key == ti.GUI.LMB:
                     LMB_down = False
 
         # Deletion
-        if env.paused and LMB_down and mouse_pos is not None:
-            env.delete_cells_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
-            if not gui.is_pressed(ti.GUI.SHIFT):
-                env.delete_ecm_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.SCALPEL_RADIUS, cycle_scalpel)
+        if env.paused and gui.is_pressed(ti.GUI.SHIFT) and LMB_down and mouse_pos is not None:
+            env.delete_cells_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.WOUND_WIDTH, cycle_scalpel)
+            env.delete_ecm_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.WOUND_WIDTH, cycle_scalpel)
 
         if display_ecm:
             gui.circles(
@@ -145,14 +147,24 @@ with open('data/data.csv', 'a') as csv_file:
         env.update_kernel()
 
         env.rebuild_grid_ecm_kernel()
+        if env.step[None] % 30 == 0:
+            sum = 0
+            count = int(env.GRID_RES/10)
+            for i in range(count):
+                sum += env.statisticHandler.get_wound_width(i)
+            avg = sum/count
 
-        csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        info = {
-            "step": env.step[None],
-            "population": env.fibroHandler.count[None],
-            "ecm": env.ecmHandler.count[None]
-        }
-        csv_writer.writerow(info)
+            csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            info = {
+                "step": env.step[None],
+                "fibroblast_count": env.fibroHandler.count[None],
+                "ecm_count": env.ecmHandler.count[None],
+                "wound_area": env.statisticHandler.get_wound_area(),
+                "wound_width": avg
+            }
+            csv_writer.writerow(info)
+            csv_file.flush()
+            os.fsync(csv_file.fileno())
 
         if env.CAPTURE_DATA and env.step[None] % 60 == 0:
             env.imagingHandler.capture_image(f"{env.DATA_PATH}/images/experiment_{env.EXPERIMENT_TIMESTAMP}")
@@ -162,8 +174,11 @@ with open('data/data.csv', 'a') as csv_file:
             warn = " | Warning: Max Cell Count Reached!"
         if env.step[None] % 10 == 0:
             print("Step: " + str(env.step[None]) + " | Hour: " + str(round(hour)) + " | Cells: " + str(env.fibroHandler.count[None]) + warn)
-
+        # print(str(env.statisticHandler.get_wound_area()) + " µm")
         hour += 24/env.CELL_CYCLE_DURATION[None]
         env.step[None] += 1
+
+if env.SAVE_VIDEO:
+    env.imagingHandler.save_video(f"{env.DATA_PATH}/images/experiment_{env.EXPERIMENT_TIMESTAMP}")
 
 gui.close()

@@ -38,7 +38,8 @@ class ParticleHandler:
                 self.grid[cell_x, cell_y, index] = i
 
     @ti.func
-    def mark_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, size: ti.f32, shape: ti.i32): # 0 = circle, 1 = square, 2 = triangle
+    def mark_for_deletion(self, mouse_x: ti.f32, mouse_y: ti.f32, width: ti.f32, shape: ti.i32):   # 0 = circle, 1 = square, 2 = triangle, 3 = triangle
+        width = width/self.env.DOMAIN_SIZE
         for i in range(self.count[None]):
             dx = self.posField[i][0] - mouse_x
             dy = self.posField[i][1] - mouse_y
@@ -46,23 +47,28 @@ class ParticleHandler:
 
             if shape == 0:  # Circle
                 dist = ti.math.length(ti.Vector([dx, dy]))
-                if dist < size:
+                if dist < width/2:
                     delete = 1
 
             elif shape == 1:  # Square
-                if ti.abs(dx) < size and ti.abs(dy) < size:
+                if ti.abs(dx) < width/2 and ti.abs(dy) < width/2:
                     delete = 1
 
             elif shape == 2:  # Upright equilateral triangle
-                height = size*2
+                height = width
                 # shift so triangle base is at -height/2, tip is at +height/2
                 local_y = dy + height / 2
                 if 0 <= local_y <= height:
                     # proportion from base (0) to tip (height)
                     t = local_y / height
-                    half_width = (1 - t) * size
+                    half_width = (1 - t) * width/2
                     if ti.abs(dx) <= half_width:
                         delete = 1
+
+            elif shape == 3:
+                if ti.abs(dx) < width/2:
+                    delete = 1
+
 
             self.toDelete[i] = delete
 
