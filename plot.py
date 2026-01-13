@@ -9,9 +9,25 @@ import socket
 sns.set_theme(style="darkgrid")
 
 # --- Plot Settings ---
-LINE_NAMES = ['population', 'ecm']
-LINE_LABELS = ['# of Cells', 'ECM Count']
-LINE_COLORS = ['#1f77b4', '#ff7f0e']
+INDICES_SELECTED = [2]
+
+title = 'Graph'
+ylabel = 'Count'
+
+# title = 'Effects of Wound type on Wound Area over Time'
+# ylabel = 'Wound Area (mm^2)'
+
+LINE_NAMES = ["fibroblast_count", "ecm_count", "wound_area", "wound_width"]
+LINE_LABELS = ["Fibroblast Population", "ECM Particle Count", "Wound Area (mm^2)", "Wound Width (μm)"]
+LINE_COLORS = ["#82c6e2", "#5222a1", "#d65f5f", "#d5bb67"]
+
+LINE_NAMES = [LINE_NAMES[i] for i in INDICES_SELECTED]
+LINE_LABELS = [LINE_LABELS[i] for i in INDICES_SELECTED]
+LINE_COLORS = [LINE_COLORS[i] for i in INDICES_SELECTED]
+
+# LINE_NAMES = ["line", "circle", "triangle", "square"]
+# LINE_LABELS = ["Line", "Circle", "Triangle", "Square"]
+# LINE_COLORS = ["#ffd166", "#118ab2", "#06d6a0", "#ef476f"]
 
 # GENE_NAMES = [f'gene{i}' for i in range(11)]
 # GENE_LABELS = [
@@ -79,6 +95,15 @@ cycle_scalpel_button.on_clicked(cycle_scalpel)
 def animate(i):
     try:
         data = pd.read_csv('data/data.csv')
+
+        required_cols = ['step'] + [
+            name for name in LINE_NAMES if name in data.columns
+        ]
+
+        data = data.dropna(subset=required_cols)
+
+        if data.empty:
+            return
     except Exception:
         return
 
@@ -93,8 +118,8 @@ def animate(i):
         if name in data.columns:
             sns.lineplot(ax=ax1, x=x, y=data[name], label=LINE_LABELS[idx], color=LINE_COLORS[idx])
 
-    ax1.set_ylabel('Count')
-    ax1.set_title('Cell Population and ECM Count Over Time')
+    ax1.set_ylabel(ylabel)
+    ax1.set_title(title)
     ax1.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
 
     # # Plot Population & ECM
@@ -119,6 +144,6 @@ def animate(i):
     # ax2.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
 
 # --- Start Animation ---
-ani = FuncAnimation(fig, animate, interval=1000)
+ani = FuncAnimation(fig, animate, interval=10)
 
 plt.show()
