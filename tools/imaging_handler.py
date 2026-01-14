@@ -26,7 +26,7 @@ class ImagingHandler:
 
         imageio.imwrite(
             path + f"/frame_{self.env.step[None]:06d}.png",
-            (self.fibro_pixel_map.T * 255).astype(np.uint8)
+            (np.flipud(self.fibro_pixel_map.T) * 255).astype(np.uint8)
         )
 
     def save_video(self, path):
