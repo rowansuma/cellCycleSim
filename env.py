@@ -34,6 +34,7 @@ class Env:
         self.CELL_REPULSION = config["cells"]["cell_repulsion"]
         self.REPRODUCTION_OFFSET = config["cells"]["reproduction_offset"]
         self.MAX_CELL_SPEED = config["cells"]["max_cell_speed"]*self.CELL_RADIUS
+        self.CELL_TURN_SPEED = config["cells"]["cell_turn_speed"]
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = config["cells"]["cell_cycle_duration"]
 
@@ -56,6 +57,7 @@ class Env:
 
         self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
         self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
+        self.DRAW_ECM_LINES = config["display"]["draw_ecm_lines"]
 
         self.EPSILON = 1e-5
 

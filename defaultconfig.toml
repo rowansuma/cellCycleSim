@@ -25,6 +25,7 @@ cell_cycle_duration = 60                # duration of the cell cycle (in steps)
 cell_repulsion = 0.005                  # how agressively cells repulse. larger = more aggressive
 reproduction_offset = 1.5               # distance from the parent that the daughter is created
 max_cell_speed = 0.004                  # max cell speed (in cell radii / step)
+cell_turn_speed = 0.01                  # cell turning speed
 
 [inhibition]
 inhibition_radius = 1.99                # distance in which cells detect neighbors (in cell radii)
@@ -48,3 +49,4 @@ phase_colors = [                        # color palette for cell phases
     0x66ff66,
     0xff6699
 ]
+draw_ecm_lines = false                  # draw connecting lines between ecm particles?
