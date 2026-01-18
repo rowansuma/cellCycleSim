@@ -116,11 +116,18 @@ with open('data/data.csv', 'a') as csv_file:
             env.delete_ecm_kernel(gui.get_cursor_pos()[0], gui.get_cursor_pos()[1], env.WOUND_WIDTH, cycle_scalpel)
 
         if display_ecm:
-            gui.circles(
-                env.ecmHandler.posField.to_numpy()[:env.ecmHandler.count[None]],
-                radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
-                color=0x252345
-            )
+            if env.DRAW_ECM_LINES:
+                gui.lines(env.ecmHandler.ecmConnectPosField.to_numpy()[:env.ecmHandler.count[None]],
+                          env.ecmHandler.posField.to_numpy()[:env.ecmHandler.count[None]],
+                          radius=1,
+                          color=0x353355)
+            else:
+                gui.circles(
+                    env.ecmHandler.posField.to_numpy()[:env.ecmHandler.count[None]],
+                    radius=env.CELL_RADIUS * env.SCREEN_SIZE[0] * env.CELL_RADIUS_SCALAR,
+                    color=0x353355
+                )
+
         if display_cells:
             positions = env.fibroHandler.posField.to_numpy()[:env.fibroHandler.count[None]]
             if display_phase:

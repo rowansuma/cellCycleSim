@@ -74,7 +74,7 @@ class ParticleHandler:
 
     @ti.func
     def create(self, posX: ti.f32, posY: ti.f32):
-        success = False
+        idx = -1
         if 0 < posX < 1 and 0 < posY < 1:
             current = self.count[None]
             if current + 1 < self.MAX_COUNT:  # Safe Addition
@@ -82,8 +82,8 @@ class ParticleHandler:
                 if new_idx < self.MAX_COUNT:
                     new_pos = [posX, posY]
                     self.initialize(new_idx, new_pos)
-                    success = True
-        return success
+                    idx = new_idx
+        return idx
 
     @ti.func
     def update(self):
