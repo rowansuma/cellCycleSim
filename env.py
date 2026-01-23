@@ -29,12 +29,15 @@ class Env:
 
         self.MAX_CELL_COUNT = config["cells"]["max_cell_count"]
         self.CELL_RADIUS_UM = config["cells"]["cell_radius"]
-        self.CELL_RADIUS = self.CELL_RADIUS_UM/config["experiment"]["domain_size"]
+        self.CELL_RADIUS = self.CELL_RADIUS_UM/self.DOMAIN_SIZE
         if self.CELL_RADIUS <= 0.0002: self.CELL_RADIUS_SCALAR = 0.00024/self.CELL_RADIUS
         self.CELL_REPULSION = config["cells"]["cell_repulsion"]
         self.REPRODUCTION_OFFSET = config["cells"]["reproduction_offset"]
-        self.MAX_CELL_SPEED = config["cells"]["max_cell_speed"]*self.CELL_RADIUS
-        self.CELL_TURN_SPEED = config["cells"]["cell_turn_speed"]
+        self.MAX_CELL_SPEED_UM = config["cells"]["max_cell_speed"]
+        self.MAX_CELL_SPEED = self.MAX_CELL_SPEED_UM/self.DOMAIN_SIZE
+        self.CELL_TURN_SPEED_RAD = config["cells"]["cell_turn_speed"]
+        self.CELL_TURN_SPEED = self.CELL_TURN_SPEED_RAD/(2*np.pi)
+        self.CELL_TURN_CHANCE = config["cells"]["cell_turn_chance"]
         self.CELL_CYCLE_DURATION = ti.field(dtype=ti.i32, shape=())
         self.CCDPlaceholder = config["cells"]["cell_cycle_duration"]
 
@@ -53,7 +56,8 @@ class Env:
         self.MAX_ECM_COUNT = config["ecm"]["max_ecm_count"]
         self.ECM_DETECTION_RADIUS = config["ecm"]["ecm_detection_radius"]*self.CELL_RADIUS
         self.ECM_THRESHOLD = config["ecm"]["ecm_threshold"]
-        self.ECM_AVOIDANCE_STRENGTH = config["ecm"]["ecm_avoidance_strength"]
+        self.ECM_AVOIDANCE_STRENGTH_UM = config["ecm"]["ecm_avoidance_strength"]
+        self.ECM_AVOIDANCE_STRENGTH = self.ECM_AVOIDANCE_STRENGTH_UM/self.DOMAIN_SIZE
 
         self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
         self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
