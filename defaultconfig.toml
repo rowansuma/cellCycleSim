@@ -24,8 +24,9 @@ cell_radius = 17                        # fibroblast radius (in micrometers)
 cell_cycle_duration = 60                # duration of the cell cycle (in steps)
 cell_repulsion = 0.005                  # how agressively cells repulse. larger = more aggressive
 reproduction_offset = 1.5               # distance from the parent that the daughter is created
-max_cell_speed = 0.004                  # max cell speed (in cell radii / step)
-cell_turn_speed = 0.01                  # cell turning speed
+max_cell_speed = 0.004                  # max cell speed (micrometers / step)
+cell_turn_speed = 0.01                  # cell turning speed (in radians / step)
+cell_turn_chance = 0.5                  # chance per step to change turning state (0-1)
 
 [inhibition]
 inhibition_radius = 1.99                # distance in which cells detect neighbors (in cell radii)
@@ -38,7 +39,7 @@ max_ecm_count = 50000                   # max ecm capacity
 min_ecm_period = 20                     # shortest allowed time between ecm deposits
 ecm_detection_radius = 20               # distance cells detect ecm (in cell radii)
 ecm_threshold = 7                       # number of ecm at which cells cease ecm deposition
-ecm_avoidance_strength = 0.000001       # magnitude of ecm avoidance vector
+ecm_avoidance_strength = 0.000001       # magnitude of ecm avoidance vector (in micrometers)
 
 [display]
 cell_radius_scalar = 1.0                # visual size multiplier for visibility at large scales

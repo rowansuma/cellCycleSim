@@ -27,45 +27,44 @@ class CellHandler(MovingParticleHandler):
 
     @ti.func
     def apply_locomotion(self, i: ti.i32):
-        for _ in range(self.env.SUBSTEPS):
-            repulse_vec = ti.Vector([0.0, 0.0])
-            ecm_count = 0
-            if self.phaseField[i] != 0:
-                gridcell_x = ti.min(ti.max(int(self.posField[i][0] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
-                gridcell_y = ti.min(ti.max(int(self.posField[i][1] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
-                ecm_centroid = ti.Vector([0.0, 0.0])
-                for offset in ti.static(ti.grouped(ti.ndrange((-2, 3), (-2, 3)))):
-                    cx = gridcell_x + offset[0]
-                    cy = gridcell_y + offset[1]
-                    if 0 <= cx < self.env.GRID_RES and 0 <= cy < self.env.GRID_RES:
-                        count = self.env.ecmHandler.gridCount[cx, cy]
-                        for j in range(count):
-                            ecm_idx = self.env.ecmHandler.grid[cx, cy, j]
-                            dx = self.posField[i] - self.env.ecmHandler.posField[ecm_idx]
-                            dist = dx.norm()
-                            if dist < self.env.ECM_DETECTION_RADIUS:
-                                ecm_centroid += self.env.ecmHandler.posField[ecm_idx]
-                                ecm_count += 1
-                if ecm_count > 0:
-                    ecm_avg_pos = ecm_centroid/ecm_count
-                    delta = self.posField[i] - ecm_avg_pos
-                    if ti.math.length(delta) > 0.005:
-                        repulse_vec = ti.math.normalize(delta)*self.env.ECM_AVOIDANCE_STRENGTH
+        repulse_vec = ti.Vector([0.0, 0.0])
+        ecm_count = 0
+        if self.phaseField[i] != 0:
+            gridcell_x = ti.min(ti.max(int(self.posField[i][0] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
+            gridcell_y = ti.min(ti.max(int(self.posField[i][1] * self.env.GRID_RES), 0), self.env.GRID_RES - 1)
+            ecm_centroid = ti.Vector([0.0, 0.0])
+            for offset in ti.static(ti.grouped(ti.ndrange((-2, 3), (-2, 3)))):
+                cx = gridcell_x + offset[0]
+                cy = gridcell_y + offset[1]
+                if 0 <= cx < self.env.GRID_RES and 0 <= cy < self.env.GRID_RES:
+                    count = self.env.ecmHandler.gridCount[cx, cy]
+                    for j in range(count):
+                        ecm_idx = self.env.ecmHandler.grid[cx, cy, j]
+                        dx = self.posField[i] - self.env.ecmHandler.posField[ecm_idx]
+                        dist = dx.norm()
+                        if dist < self.env.ECM_DETECTION_RADIUS:
+                            ecm_centroid += self.env.ecmHandler.posField[ecm_idx]
+                            ecm_count += 1
+            if ecm_count > 0:
+                ecm_avg_pos = ecm_centroid/ecm_count
+                delta = self.posField[i] - ecm_avg_pos
+                if ti.math.length(delta) > 0.005:
+                    repulse_vec = ti.math.normalize(delta)*self.env.ECM_AVOIDANCE_STRENGTH
 
-            if ti.random() < 0.3:
-                r = ti.random()
+        if ti.random() < self.env.CELL_TURN_CHANCE:
+            r = ti.random()
+            val = 0
+            if r < 1/3:
+                val = -1
+            elif r < 2/3:
                 val = 0
-                if r < 1/3:
-                    val = -1
-                elif r < 2/3:
-                    val = 0
-                else:
-                    val = 1
-                self.mvmtField[i][1] = val
-            self.mvmtField[i][0] += self.mvmtField[i][1] * self.env.CELL_TURN_SPEED
-            angle = self.mvmtField[i][0] * 2 * ti.math.pi
-            mvmtVector = self.mvmtField[i][2] * ti.Vector([ti.cos(angle), ti.sin(angle)])
-            self.posField[i] += (mvmtVector+repulse_vec)/(ti.math.log(ecm_count+5)-0.6)
+            else:
+                val = 1
+            self.mvmtField[i][1] = val
+        self.mvmtField[i][0] += self.mvmtField[i][1] * self.env.CELL_TURN_SPEED
+        angle = self.mvmtField[i][0] * 2 * ti.math.pi
+        mvmtVector = self.mvmtField[i][2] * ti.Vector([ti.cos(angle), ti.sin(angle)])
+        self.posField[i] += (mvmtVector+repulse_vec)/(ti.math.log(ecm_count+5)-0.6)
 
     @ti.func
     def update(self):

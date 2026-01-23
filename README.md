@@ -1,16 +1,19 @@
-# Cell Cycle Simulation
+# FISS: A Fibroblast In-Silico Simulator
 Made by Rowan Sumanaweera
 
 ## Goal
 
-<p>To make a rudimentary simulation of the cell cycle that can later be used to model gene expression.</p>
+<p>To make a simulation of migration and proliferation in Fibroblasts to specifically model Wound Healing, Gene Expression, and the Cell Cycle.</p>
 
-## Necessary Components/Rules (for now)
+## Key Components
 
-* Cells must undergo a cell cycle (proportional to real world timings)
-* Cells must divide at the end of said cycle to reproduce
-* Cells must undergo contact inhibition and exit the cell cycle when in contact with many other cells
-* Cells must have physics interactions to prevent them from overlapping
+Fibroblasts:
+* are represented by large colored circles 
+* move along a random movement vector when not in G0
+* go through the cell cycle (gray = G0, blue = G1, yellow = S, green = G2, red = M), and divide after M
+* can exit the cell cycle and enter G0 if too crowded (Contact Inhibition) and can re-enter if the nearby cell density decreases
+* occasionally deposit ECM (extra-cellular matrix) "particles" (represented by small purple circles)
+* are repelled by ECM to encourage them to close wounds
 
 ## Current Task List
 
@@ -31,24 +34,22 @@ Made by Rowan Sumanaweera
 - [x] Add Variable Cell Motion
 - [x] Add Input Parameters TOML File
 - [x] Add Deletion Shapes
-- [ ] Create Batch Experiment Mode
-- [ ] Create Image Frame Capturer
-- [ ] Design Experimental Data Collection Methods
-- [ ] Add CAD Deletion Shape compatibility
-- [ ] Create In/Out HTML Page
+- [x] Create Image Frame Capturer
+- [x] Design Experimental Data Collection Methods
+- [ ] Begin Validation
+- [ ] Write Paper
+- [ ] Publish
 
+## Tools
+* **Space**: pause simulation
+* **Right** click: create cell
+* **Shift** + left click: delete cells within a specialized radius and shape (only while paused)
+* **Alt**: save simulation state
+* **Escape**: exit
 
-## Usage
+<p>There are miscellaneous buttons in the plot.py window.
+<p>Input your specialized experiment configuration in config.toml.
+<p>Find your saved simulation state in /savestates/
 
-1. Edit config.toml to suit your experimental needs
-2. Run main.py to open the simulation, input simulation parameters.
-3. Press Space to pause. When paused, hold Left Click to delete cells in a radius
-4. Press Right Click to create a cell
-5. Note that the colors indicate cell cycle stage; (gray=G0, blue=G1, yellow=S, green=G2, red=M)
-
-# Dependencies
+## Dependencies
 The simulation was designed using python 3.9 and the following python packages: taichi 1.7.3, tomli 2.2.1, numpy 2.0.2, matplotlib 3.9.4, seaborn 0.13.2, and pandas 2.3.0.
-
-## Other Notes
-
-* I originally was planning to use standard python classes and Verlet integration to do this, but after some research I decided to try using [Taichi](https://www.taichi-lang.org/). This will allow me to use Verlet integration with help from the GPU and speed things up.
