@@ -1,5 +1,5 @@
 # FISS: A Fibroblast In-Silico Simulator
-Made by Rowan Sumanaweera
+Made by Rowan Sumanaweera. Project started in June 2025.
 
 ## Goal
 
