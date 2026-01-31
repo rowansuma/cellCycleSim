@@ -1,9 +1,19 @@
-# FISS: A Fibroblast In-Silico Simulator
-Made by Rowan Sumanaweera. Project started in June 2025.
+<p align="center">
+  <img src="./figures/fiss-logo.png" width="250">
+</p>
+<h1 align="center">FISS: A Fibroblast In-Silico Simulator</h1>
+<p align="center" style="margin-top: -10px;">
+  <em></em>
+</p>
+<p align="center">
+<a href="https://docs.google.com/document/d/1ROzoR6iv61_18U8YB8cceNsBOWdE905ZzzW_XGZZEgM/edit?tab=t.0"><img src="https://img.shields.io/badge/Summary-white?style=for-the-badge&logo=googledocs" alt="Summary"></a>
+<a href="https://docs.google.com/presentation/d/1ez3Qw04UkxXO1HXnFAF8e8aQD9lcpfGfwMf-Ycy0IGI/edit?slide=id.p#slide=id.p"><img src="https://img.shields.io/badge/Slideshow-white?style=for-the-badge&logo=googleslides" alt="Slideshow"></a>
+<a href="https://drive.google.com/file/d/1KrZHcmWfxkzDpafXBIXLX_A5S66oK6V5/view?t=5"><img src="https://img.shields.io/badge/Demonstration-white?style=for-the-badge&logo=youtube&logoColor=ff0000" alt="Demonstration"></a>
+</p>
 
-## Goal
-
-<p>To make a simulation of migration and proliferation in Fibroblasts to specifically model Wound Healing, Gene Expression, and the Cell Cycle.</p>
+<p>A Fibroblast migration and proliferation simulation to model Wound Healing, Gene Expression, and the Cell Cycle.
+  
+  Made by Rowan Sumanaweera. Project started in June 2025.</p>
 
 ## Key Components
 
@@ -14,6 +24,31 @@ Fibroblasts:
 * can exit the cell cycle and enter G0 if too crowded (Contact Inhibition) and can re-enter if the nearby cell density decreases
 * occasionally deposit ECM (extra-cellular matrix) "particles" (represented by small purple circles)
 * are repelled by ECM to encourage them to close wounds
+
+## Related Figures
+<table align="center">
+  <tr>
+    <td>
+      <img src="./figures/cell-growth.gif" height="180">
+    </td>
+    <td>
+      <img src="./figures/circle-wound-healing.gif" height="180">
+    </td>
+    <td>
+      <img src="./figures/triangle-wound-healing.gif" height="180">
+    </td>
+    <td>
+      <img src="./figures/square-wound-healing.gif" height="180">
+    </td>
+    <td>
+      <img src="./figures/line-wound-healing.gif" height="180">
+    </td>
+  </tr>
+</table>
+<p><em>Various wound shape presets for scratch assay experiments.</em></p>
+
+<img src="./figures/ecm-fibroblasts.png" height="220">
+<p><em>ECM and Fibroblast growth at a given simulation step.</em></p>
 
 ## Current Task List
 
