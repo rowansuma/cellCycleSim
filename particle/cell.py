@@ -1,3 +1,4 @@
+import numpy as np
 import taichi as ti
 
 from particle.moving_particle import MovingParticleHandler
@@ -210,11 +211,16 @@ class CellHandler(MovingParticleHandler):
         self.neighborField.from_numpy(data["neighborField"])
         self.phaseField.from_numpy(data["phaseField"])
         self.mvmtField.from_numpy(data["mvmtField"])
-        self.cycleDurField.from_numpy(data["cycleDurField"])
+
+        # Regenerate cycle durations cleanly
+        new_durations = np.full(self.MAX_COUNT, self.env.CELL_CYCLE_DURATION[None], dtype=np.int32)
+        new_durations[:self.count[None]] += np.random.randint(-40, 40, size=self.count[None])
+
+        self.cycleDurField.from_numpy(new_durations)
 
         self.lastDivFieldBuffer.from_numpy(data["lastDivFieldBuffer"])
         self.inhibitionFieldBuffer.from_numpy(data["inhibitionFieldBuffer"])
         self.neighborFieldBuffer.from_numpy(data["neighborFieldBuffer"])
         self.phaseFieldBuffer.from_numpy(data["phaseFieldBuffer"])
         self.mvmtFieldBuffer.from_numpy(data["mvmtFieldBuffer"])
-        self.cycleDurFieldBuffer.from_numpy(data["cycleDurFieldBuffer"])
+        self.cycleDurFieldBuffer.from_numpy(new_durations)
