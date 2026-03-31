@@ -71,7 +71,7 @@ Fibroblasts:
 - [x] Add Deletion Shapes
 - [x] Create Image Frame Capturer
 - [x] Design Experimental Data Collection Methods
-- [ ] Begin Validation
+- [x] Begin Validation
 - [ ] Write Paper
 - [ ] Publish
 
