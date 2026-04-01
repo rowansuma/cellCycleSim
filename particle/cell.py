@@ -65,7 +65,7 @@ class CellHandler(MovingParticleHandler):
         self.mvmtField[i][0] += self.mvmtField[i][1] * self.env.CELL_TURN_SPEED
         angle = self.mvmtField[i][0] * 2 * ti.math.pi
         mvmtVector = self.mvmtField[i][2] * ti.Vector([ti.cos(angle), ti.sin(angle)])
-        self.posField[i] += (mvmtVector+repulse_vec)/(ti.math.log(ecm_count+5)-0.6)
+        self.posField[i] += (mvmtVector+repulse_vec)*ti.exp(-ecm_count*self.env.ECM_SLOW_CONSTANT)
 
     @ti.func
     def update(self):

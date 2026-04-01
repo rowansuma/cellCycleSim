@@ -40,6 +40,7 @@ min_ecm_period = 20                     # shortest allowed time between ecm depo
 ecm_detection_radius = 20               # distance cells detect ecm (in cell radii)
 ecm_threshold = 7                       # number of ecm at which cells cease ecm deposition
 ecm_avoidance_strength = 0.000001       # magnitude of ecm avoidance vector (in micrometers)
+ecm_slow_constant = 0.5                 # constant a in motion slowdown: motion * e^-(ax), higher = less effect
 
 [display]
 cell_radius_scalar = 1.0                # visual size multiplier for visibility at large scales

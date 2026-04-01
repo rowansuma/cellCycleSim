@@ -58,6 +58,7 @@ class Env:
         self.ECM_THRESHOLD = config["ecm"]["ecm_threshold"]
         self.ECM_AVOIDANCE_STRENGTH_UM = config["ecm"]["ecm_avoidance_strength"]
         self.ECM_AVOIDANCE_STRENGTH = self.ECM_AVOIDANCE_STRENGTH_UM/self.DOMAIN_SIZE
+        self.ECM_SLOW_CONSTANT = config["ecm"]["ecm_slow_constant"]
 
         self.PHASE_COLORS = np.array(config["display"]["phase_colors"], dtype=np.uint32)
         self.CELL_RADIUS_SCALAR = config["display"]["cell_radius_scalar"]
