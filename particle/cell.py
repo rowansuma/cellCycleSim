@@ -1,7 +1,7 @@
 import numpy as np
 import taichi as ti
 
-from particle.moving_particle import MovingParticleHandler
+from FISS.particle.moving_particle import MovingParticleHandler
 
 @ti.data_oriented
 class CellHandler(MovingParticleHandler):

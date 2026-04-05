@@ -4,17 +4,17 @@ import os
 import shutil
 import csv
 
-from env import Env
+from FISS.env import Env
 
 class Trial:
     def __init__(self, display_visuals=False, display_cells=True, display_phase=True, display_ecm=True, scalpel="circle"):
         ti.init(arch=ti.gpu)
 
-        if not os.path.exists("config.toml"):
-            shutil.copyfile("defaultconfig.toml", "config.toml")
+        if not os.path.exists("FISS/config.toml"):
+            shutil.copyfile("FISS/defaultconfig.toml", "FISS/config.toml")
             print(f"Created config.toml from defaultconfig.toml")
         
-        with open('config.toml', 'rb') as f:
+        with open('FISS/config.toml', 'rb') as f:
             config = tomli.load(f)
             
         self.env = Env(config)
@@ -34,9 +34,9 @@ class Trial:
 
         self.data_fieldnames = ["step", "fibroblast_count", "ecm_count", "wound_area", "wound_width"]
 
-        os.makedirs("data", exist_ok=True)
+        os.makedirs("FISS/data", exist_ok=True)
 
-        with open('data/data.csv', 'w') as csv_file:
+        with open('FISS/data/data.csv', 'w') as csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self.data_fieldnames)
             csv_writer.writeheader()
 
@@ -52,7 +52,7 @@ class Trial:
         self.env.experimental_setup()
 
         # Main Loop
-        with open('data/data.csv', 'a') as csv_file:
+        with open('FISS/data/data.csv', 'a') as csv_file:
             while self.env.END_STEP == -1 or self.env.step[None] < self.env.END_STEP:
                 if self.env.INITIAL_WOUND_AREA is None:
                     self.env.INITIAL_WOUND_AREA = self.env.statisticHandler.get_wound_area()

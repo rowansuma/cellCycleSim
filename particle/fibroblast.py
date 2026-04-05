@@ -1,6 +1,6 @@
 import taichi as ti
 
-from particle.cell import CellHandler
+from FISS.particle.cell import CellHandler
 
 @ti.data_oriented
 class FibroblastHandler(CellHandler):

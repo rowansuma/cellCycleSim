@@ -1,6 +1,6 @@
 import taichi as ti
 
-from particle.particle import ParticleHandler
+from FISS.particle.particle import ParticleHandler
 
 
 @ti.data_oriented

@@ -2,11 +2,11 @@ import taichi as ti
 import numpy as np
 from datetime import datetime
 
-from tools.imaging_handler import ImagingHandler
-from tools.save_handler import SaveHandler
-from particle.ecm import ECMHandler
-from particle.fibroblast import FibroblastHandler
-from tools.statistic_handler import StatisticHandler
+from FISS.tools.imaging_handler import ImagingHandler
+from FISS.tools.save_handler import SaveHandler
+from FISS.particle.ecm import ECMHandler
+from FISS.particle.fibroblast import FibroblastHandler
+from FISS.tools.statistic_handler import StatisticHandler
 
 
 @ti.data_oriented
@@ -99,7 +99,7 @@ class Env:
         if self.INITIAL_MODE == "single":
             self.create_cell_kernel(0.5, 0.5)
         elif self.INITIAL_MODE == "full":
-            self.saveHandler.load_state("defaultstates/full_state")
+            self.saveHandler.load_state("FISS/defaultstates/full_state")
         else:
             raise Exception("Invalid initial mode: " + self.INITIAL_MODE)
 

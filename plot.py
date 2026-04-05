@@ -10,11 +10,11 @@ from matplotlib.animation import FuncAnimation
 # --- Seaborn Theme ---
 sns.set_theme(style="darkgrid")
 
-if not os.path.exists("config.toml"):
-    shutil.copyfile("defaultconfig.toml", "config.toml")
+if not os.path.exists("FISS/config.toml"):
+    shutil.copyfile("FISS/defaultconfig.toml", "FISS/config.toml")
     print(f"Created config.toml from defaultconfig.toml")
 
-with open('config.toml', 'rb') as f:
+with open('FISS/config.toml', 'rb') as f:
     config = tomli.load(f)
 
 # --- Plot Settings ---
@@ -62,7 +62,7 @@ fig, (ax1) = plt.subplots(1, 1, figsize=(10, 8), sharex=True, constrained_layout
 # --- Animation Function ---
 def animate(i):
     try:
-        data = pd.read_csv('data/data.csv')
+        data = pd.read_csv('FISS/data/data.csv')
 
         required_cols = ['step'] + [
             name for name in LINE_NAMES if name in data.columns

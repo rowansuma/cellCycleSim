@@ -4,7 +4,7 @@ import sys
 from run import Trial
 
 def main():
-    plot_proc = subprocess.Popen([sys.executable, "plot.py"])
+    plot_proc = subprocess.Popen([sys.executable, "FISS/plot.py"])
 
     num_trials = 1
     for i in range(num_trials):
