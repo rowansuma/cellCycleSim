@@ -82,7 +82,6 @@ Fibroblasts:
 * **Alt**: save simulation state
 * **Escape**: exit
 
-<p>There are miscellaneous buttons in the plot.py window.
 <p>Input your specialized experiment configuration in config.toml.
 <p>Find your saved simulation state in /savestates/
 
