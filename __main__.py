@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-from run import Trial
+from FISS.run import Trial
 
 def main():
     plot_proc = subprocess.Popen([sys.executable, "FISS/plot.py"])
