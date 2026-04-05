@@ -10,6 +10,8 @@ initial_mode = "single"                 # options: single (1 cell), full (entire
 initial_wound = "none"                  # creates an initial wound in a full tissue. options: none, circle, triangle, square
 wound_width = 5200                      # wound width / diameter / altitude (in micrometers)
 end_step = -1                           # ends the simulation at this specified time step (-1 = unending)
+end_on_wound_heal = false               # whether the simulation ends after the entire simulation space is filled
+end_timer_duration = 0                 # the number of steps after which the simulation ends after the entire space is filled
 
 [data_collection]
 capture_data = false                    # capture and save permanent experiment data?

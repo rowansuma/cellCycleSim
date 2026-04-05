@@ -1,18 +1,29 @@
+import os
+import shutil
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import tomli
 from matplotlib.animation import FuncAnimation
-from matplotlib.widgets import Button
-import socket
 
 # --- Seaborn Theme ---
 sns.set_theme(style="darkgrid")
+
+if not os.path.exists("config.toml"):
+    shutil.copyfile("defaultconfig.toml", "config.toml")
+    print(f"Created config.toml from defaultconfig.toml")
+
+with open('config.toml', 'rb') as f:
+    config = tomli.load(f)
 
 # --- Plot Settings ---
 INDICES_SELECTED = [2]
 
 title = 'Graph'
 ylabel = 'Count'
+
+FIBROBLAST_CELL_CYCLE_TICKS = config["cells"]["cell_cycle_duration"]
 
 # title = 'Effects of Wound type on Wound Area over Time'
 # ylabel = 'Wound Area (mm^2)'
@@ -47,49 +58,6 @@ PHASE_COLORS = ["#858585", "#66ccff", "#ffcc66", "#66ff66"]
 # --- Create Figure and Subplots ---
 fig, (ax1) = plt.subplots(1, 1, figsize=(10, 8), sharex=True, constrained_layout=True)
 
-# --- Add Button to Same Figure ---
-# The coordinate system is [left, bottom, width, height] in figure-relative units
-ax_toggle_phase = fig.add_axes([0.83, 0.18, 0.15, 0.05])
-ax_toggle_cells = fig.add_axes([0.83, 0.12, 0.15, 0.05])
-ax_toggle_ecm = fig.add_axes([0.83, 0.06, 0.15, 0.05])
-ax_cycle_scalpel = fig.add_axes([0.83, 0.00, 0.15, 0.05])
-
-
-toggle_phase_button = Button(ax_toggle_phase, 'Toggle Phase')
-toggle_cells_button = Button(ax_toggle_cells, 'Toggle Cells')
-toggle_ecm_button = Button(ax_toggle_ecm, 'Toggle ECM')
-cycle_scalpel_button = Button(ax_cycle_scalpel, 'Cycle Scalpel')
-
-
-
-# --- Socket Command Sender ---
-def send_command(cmd):
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', 65432))
-            s.sendall(cmd.encode('utf-8'))
-            response = s.recv(1024)
-    except ConnectionRefusedError:
-        print("Could not connect to main.py socket server.")
-
-def toggle_phase(event):
-    send_command("toggle_display_phase")
-
-def toggle_cells(event):
-    send_command("toggle_display_cells")
-
-def toggle_ecm(event):
-    send_command("toggle_display_ecm")
-
-def cycle_scalpel(event):
-    send_command("cycle_scalpel")
-
-
-toggle_phase_button.on_clicked(toggle_phase)
-toggle_cells_button.on_clicked(toggle_cells)
-toggle_ecm_button.on_clicked(toggle_ecm)
-cycle_scalpel_button.on_clicked(cycle_scalpel)
-
 
 # --- Animation Function ---
 def animate(i):
@@ -107,7 +75,7 @@ def animate(i):
     except Exception:
         return
 
-    x = data['step']
+    x = 24*data['step']/FIBROBLAST_CELL_CYCLE_TICKS
 
     # Clear previous plots
     ax1.cla()
@@ -138,7 +106,7 @@ def animate(i):
     #     if gene in data.columns:
     #         sns.lineplot(ax=ax2, x=x, y=data[gene], label=GENE_LABELS[idx], color=GENE_COLORS[idx % len(GENE_COLORS)])
     #
-    ax1.set_xlabel('Simulation Step')
+    ax1.set_xlabel('Hour')
     # ax2.set_ylabel('Gene Expression Level')
     # ax2.set_title('Gene Expression in First Cell Over Time')
     # ax2.legend(loc='upper left', bbox_to_anchor=(1.05, 1))

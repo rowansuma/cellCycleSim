@@ -65,7 +65,7 @@ class ParticleHandler:
                     if ti.abs(dx) <= half_width:
                         delete = 1
 
-            elif shape == 3:
+            elif shape == 3: # Line
                 if ti.abs(dx) < width/2:
                     delete = 1
 
